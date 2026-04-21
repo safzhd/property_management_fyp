@@ -1,0 +1,43 @@
+{
+  "name": "saphyroo-property-management",
+  "version": "1.0.0",
+  "description": "HMO Property Management Platform for UK Landlords",
+  "main": "src/server.js",
+  "scripts": {
+    "dev": "nodemon src/server.js",
+    "start": "node src/server.js",
+    "test": "jest",
+    "init-db": "node sql/init.js",
+    "migrate": "node sql/migrate.js"
+  },
+  "keywords": [
+    "property-management",
+    "hmo",
+    "landlord",
+    "uk",
+    "fastify"
+  ],
+  "author": "Saphyroo",
+  "license": "MIT",
+  "dependencies": {
+    "@fastify/cors": "^11.2.0",
+    "@fastify/helmet": "^13.0.2",
+    "@fastify/jwt": "^10.0.0",
+    "@fastify/multipart": "^10.0.0",
+    "@fastify/rate-limit": "^10.3.0",
+    "@fastify/swagger": "^9.7.0",
+    "@fastify/swagger-ui": "^5.2.5",
+    "bcryptjs": "^2.4.3",
+    "dotenv": "^16.4.5",
+    "fastify": "^5.8.4",
+    "mysql2": "^3.11.0",
+    "nanoid": "^3.3.7",
+    "nodemailer": "^8.0.5",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0",
+    "nodemon": "^3.1.4",
+    "pino-pretty": "^13.1.3"
+  }
+}

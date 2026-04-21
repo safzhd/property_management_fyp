@@ -1,0 +1,54 @@
+@import "tailwindcss";
+
+@theme {
+  /* PropManage colour palette */
+  --color-primary: #7dd3fc;
+  --color-primary-hover: #38bdf8;
+  --color-primary-foreground: #ffffff;
+
+  --color-background: #f9fafb;
+  --color-surface: #ffffff;
+  --color-border: #e5e7eb;
+  --color-input: #e5e7eb;
+  --color-ring: #3b82f6;
+
+  --color-foreground: #111827;
+  --color-muted: #6b7280;
+  --color-muted-bg: #f3f4f6;
+
+  --color-destructive: #ef4444;
+  --color-destructive-foreground: #ffffff;
+
+  --color-success: #10b981;
+  --color-warning: #f59e0b;
+
+  /* Sidebar — dark */
+  --color-sidebar: #111827;
+  --color-sidebar-foreground: #f9fafb;
+  --color-sidebar-muted: #6b7280;
+  --color-sidebar-accent: #3b82f6;
+  --color-sidebar-border: #1f2937;
+
+  /* Border radius */
+  --radius-sm: 0.375rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
+  --radius-xl: 1rem;
+
+  /* Font */
+  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+}
+
+@layer base {
+  body {
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  * {
+    box-sizing: border-box;
+  }
+}
