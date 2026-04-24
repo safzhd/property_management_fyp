@@ -3,9 +3,7 @@ import {
   LayoutDashboard,
   Building2,
   FileText,
-  CreditCard,
-  Wrench,
-  ShieldCheck,
+  ArrowLeftRight,
   FolderOpen,
   Bell,
   Home,
@@ -26,16 +24,14 @@ interface NavItem {
 }
 
 const navItems: NavItem[] = [
-  { label: 'Dashboard',     to: '/app/dashboard',     icon: LayoutDashboard, roles: ['admin', 'landlord'] },
-  { label: 'Properties',    to: '/app/properties',    icon: Building2,       roles: ['admin', 'landlord'] },
-  { label: 'Tenancies',     to: '/app/tenancies',     icon: FileText,        roles: ['admin', 'landlord'] },
-  { label: 'Payments',      to: '/app/payments',      icon: CreditCard,      roles: ['admin', 'landlord'] },
-  { label: 'Compliance',    to: '/app/compliance',    icon: ShieldCheck,     roles: ['admin', 'landlord'] },
-  { label: 'Maintenance',   to: '/app/maintenance',   icon: Wrench,          roles: ['admin', 'landlord', 'tenant'] },
-  { label: 'Documents',     to: '/app/documents',     icon: FolderOpen,      roles: ['admin', 'landlord', 'tenant'] },
-  { label: 'Notifications', to: '/app/notifications', icon: Bell,            roles: ['admin', 'landlord', 'tenant'] },
-  { label: 'My Tenancy',    to: '/app/my-tenancy',    icon: Home,            roles: ['tenant'] },
-  { label: 'Admin',         to: '/app/admin',         icon: Settings,        roles: ['admin'] },
+  { label: 'Dashboard',     to: '/app/dashboard',     icon: LayoutDashboard,  roles: ['admin', 'landlord'] },
+  { label: 'Properties',    to: '/app/properties',    icon: Building2,        roles: ['admin', 'landlord'] },
+  { label: 'Tenancies',     to: '/app/tenancies',     icon: FileText,         roles: ['admin', 'landlord'] },
+  { label: 'Transactions',  to: '/app/transactions',  icon: ArrowLeftRight,   roles: ['admin', 'landlord'] },
+  { label: 'Documents',     to: '/app/documents',     icon: FolderOpen,       roles: ['admin', 'landlord', 'tenant'] },
+  { label: 'Notifications', to: '/app/notifications', icon: Bell,             roles: ['admin', 'landlord', 'tenant'] },
+  { label: 'My Tenancy',    to: '/app/my-tenancy',    icon: Home,             roles: ['tenant'] },
+  { label: 'Admin',         to: '/app/admin',         icon: Settings,         roles: ['admin'] },
 ]
 
 const roleLabel: Record<Role, string> = {

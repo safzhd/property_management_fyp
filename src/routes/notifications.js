@@ -305,6 +305,117 @@ async function notificationsRoutes(fastify, options) {
     }
   });
 
+  // Smart notifications — derived live from tenancy data (no storage needed)
+  fastify.get('/smart', {
+    onRequest: [fastify.authenticate],
+    schema: { description: 'Get smart derived notifications from tenancy data', tags: ['Notifications'], security: [{ bearerAuth: [] }] }
+  }, async (request, reply) => {
+    try {
+      const userId = request.user.id;
+      const role   = request.user.role;
+
+      const tenancyQuery = role === 'admin'
+        ? `SELECT t.id, t.lifecycle_status, t.start_date, t.end_date,
+                  t.tenant_info_sheet_provided, t.how_to_rent_guide_provided, t.deposit_protected_date,
+                  t.notice_served_date, t.eviction_grounds, t.created_at,
+                  CONCAT(u.given_name, ' ', u.last_name) AS tenant_name,
+                  COALESCE(p.property_name, p.address_line_1) AS property_name
+           FROM tenancies t
+           JOIN properties p ON t.property_id = p.id
+           JOIN users u ON t.tenant_id = u.id
+           WHERE t.lifecycle_status NOT IN ('ended','cancelled')`
+        : `SELECT t.id, t.lifecycle_status, t.start_date, t.end_date,
+                  t.tenant_info_sheet_provided, t.how_to_rent_guide_provided, t.deposit_protected_date,
+                  t.notice_served_date, t.eviction_grounds, t.created_at,
+                  CONCAT(u.given_name, ' ', u.last_name) AS tenant_name,
+                  COALESCE(p.property_name, p.address_line_1) AS property_name
+           FROM tenancies t
+           JOIN properties p ON t.property_id = p.id
+           JOIN users u ON t.tenant_id = u.id
+           WHERE p.landlord_id = ? AND t.lifecycle_status NOT IN ('ended','cancelled')`;
+
+      const [tenancies] = await pool.query(tenancyQuery, role === 'admin' ? [] : [userId]);
+
+      const alerts = [];
+      const now = new Date();
+
+      for (const t of tenancies) {
+        // Draft not progressed after 3 days
+        if (t.lifecycle_status === 'pending') {
+          const ageDays = (now - new Date(t.created_at)) / 86400000;
+          if (ageDays >= 3) {
+            alerts.push({
+              id: `draft-${t.id}`,
+              type: 'tenancy_draft',
+              severity: 'warning',
+              title: 'Draft Tenancy Not Progressed',
+              message: `${t.tenant_name} at ${t.property_name} has been in Draft for ${Math.floor(ageDays)} days.`,
+              tenancyId: t.id,
+              createdAt: t.created_at,
+            });
+          }
+        }
+
+        // Compliance items missing (onboarding)
+        if (t.lifecycle_status === 'onboarding') {
+          const missing = [];
+          if (!t.how_to_rent_guide_provided) missing.push('How to Rent Guide');
+          if (!t.tenant_info_sheet_provided)  missing.push('Tenant Info Sheet');
+          if (!t.deposit_protected_date)       missing.push('Deposit Protection Date');
+          if (missing.length > 0) {
+            alerts.push({
+              id: `compliance-${t.id}`,
+              type: 'compliance_incomplete',
+              severity: 'warning',
+              title: 'Compliance Items Outstanding',
+              message: `${t.tenant_name} — still missing: ${missing.join(', ')}.`,
+              tenancyId: t.id,
+              createdAt: t.created_at,
+            });
+          }
+        }
+
+        // Section 8 notice active
+        if (t.lifecycle_status === 'notice') {
+          alerts.push({
+            id: `notice-${t.id}`,
+            type: 'tenancy_notice',
+            severity: 'high',
+            title: 'Section 8 Notice Active',
+            message: `Notice served on ${t.tenant_name} at ${t.property_name}${t.eviction_grounds ? ` (${t.eviction_grounds})` : ''}.`,
+            tenancyId: t.id,
+            createdAt: t.notice_served_date || t.created_at,
+          });
+        }
+
+        // Fixed-term ending within 60 days
+        if (t.end_date) {
+          const daysLeft = (new Date(t.end_date) - now) / 86400000;
+          if (daysLeft >= 0 && daysLeft <= 60) {
+            alerts.push({
+              id: `ending-${t.id}`,
+              type: 'tenancy_ending',
+              severity: daysLeft <= 14 ? 'high' : 'normal',
+              title: 'Fixed-Term Tenancy Ending Soon',
+              message: `${t.tenant_name} at ${t.property_name} ends in ${Math.ceil(daysLeft)} day${Math.ceil(daysLeft) !== 1 ? 's' : ''}.`,
+              tenancyId: t.id,
+              createdAt: t.created_at,
+            });
+          }
+        }
+      }
+
+      // Sort high severity first
+      const order = { high: 0, warning: 1, normal: 2, low: 3 };
+      alerts.sort((a, b) => (order[a.severity] ?? 2) - (order[b.severity] ?? 2));
+
+      return reply.send({ alerts, count: alerts.length });
+    } catch (error) {
+      fastify.log.error(error);
+      return reply.code(500).send({ error: 'Failed to generate smart notifications' });
+    }
+  });
+
   // Get unread count
   fastify.get('/unread-count', {
     onRequest: [fastify.authenticate],

@@ -1,9 +1,10 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
-import { Plus, FileText, MapPin, User, Home, ChevronRight, Search } from 'lucide-react'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { Plus, FileText, MapPin, User, Home, ChevronRight, Search, Trash2 } from 'lucide-react'
+import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
-import { getTenancies } from '@/api/tenancies'
+import { getTenancies, deleteTenancy } from '@/api/tenancies'
 import type { Tenancy, LifecycleStatus } from '@/types/tenancy'
 
 const STATUS_LABELS: Record<LifecycleStatus, string> = {
@@ -46,15 +47,27 @@ function formatCurrency(amount: number) {
   return new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP', minimumFractionDigits: 0 }).format(amount)
 }
 
-function TenancyCard({ tenancy }: { tenancy: Tenancy }) {
+function TenancyCard({ tenancy, onDelete }: { tenancy: Tenancy; onDelete: (id: string) => void }) {
   const navigate = useNavigate()
+  const [armed, setArmed] = useState(false)
   const propertyDisplay = tenancy.property.name || tenancy.property.address
 
+  function handleDelete(e: React.MouseEvent) {
+    e.stopPropagation()
+    if (!armed) {
+      setArmed(true)
+      setTimeout(() => setArmed(false), 3000) // auto-disarm after 3s
+      return
+    }
+    onDelete(tenancy.id)
+  }
+
   return (
-    <button
-      onClick={() => navigate(`/app/tenancies/${tenancy.id}`)}
-      className="w-full text-left bg-white rounded-xl border border-gray-200 hover:shadow-md hover:border-sky-200 transition-all group p-5"
-    >
+    <div className="relative group">
+      <button
+        onClick={() => navigate(`/app/tenancies/${tenancy.id}`)}
+        className="w-full text-left bg-white rounded-xl border border-gray-200 hover:shadow-md hover:border-sky-200 transition-all group p-5"
+      >
       <div className="flex items-start justify-between gap-3">
         {/* Left — tenant info */}
         <div className="flex items-center gap-3 min-w-0">
@@ -101,18 +114,47 @@ function TenancyCard({ tenancy }: { tenancy: Tenancy }) {
           {tenancy.endDate ? ` → ${formatDate(tenancy.endDate)}` : ' (periodic)'}
         </div>
       </div>
-    </button>
+      </button>
+
+      {/* Delete button — hover reveal, two-click confirm */}
+      <button
+        onClick={handleDelete}
+        title={armed ? 'Click again to confirm delete' : 'Delete tenancy'}
+        className={cn(
+          'absolute top-3 right-3 p-1.5 rounded-lg text-xs font-medium transition-all',
+          'opacity-0 group-hover:opacity-100',
+          armed
+            ? 'bg-red-500 text-white opacity-100'
+            : 'bg-red-50 text-red-400 hover:bg-red-100 hover:text-red-600'
+        )}
+      >
+        {armed
+          ? <span className="flex items-center gap-1 px-1"><Trash2 className="w-3.5 h-3.5" /> Confirm</span>
+          : <Trash2 className="w-3.5 h-3.5" />
+        }
+      </button>
+    </div>
   )
 }
 
 export default function TenanciesPage() {
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const [statusFilter, setStatusFilter] = useState('')
   const [search, setSearch] = useState('')
 
   const { data: tenancies = [], isLoading } = useQuery({
     queryKey: ['tenancies', statusFilter],
     queryFn: () => getTenancies(statusFilter ? { lifecycleStatus: statusFilter } : undefined),
+  })
+
+  const deleteMutation = useMutation({
+    mutationFn: deleteTenancy,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['tenancies'] })
+      toast.success('Tenancy deleted')
+    },
+    onError: () => toast.error('Failed to delete tenancy'),
   })
 
   const filtered = tenancies.filter(t => {
@@ -203,7 +245,7 @@ export default function TenanciesPage() {
       ) : (
         <div className="space-y-3">
           {filtered.map(t => (
-            <TenancyCard key={t.id} tenancy={t} />
+            <TenancyCard key={t.id} tenancy={t} onDelete={(id) => deleteMutation.mutate(id)} />
           ))}
         </div>
       )}

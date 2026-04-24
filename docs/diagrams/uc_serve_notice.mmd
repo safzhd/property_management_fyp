@@ -1,0 +1,50 @@
+graph LR
+    Landlord(("👤 Landlord"))
+
+    subgraph Serve Notice - Section 8
+        UC1([Select Section 8 Ground])
+        UC2([View Legal Ground Info])
+        UC3([View Required Documents])
+        UC4([View Notice Period])
+        UC5([Enter Supporting Details])
+        UC6([Set Date Notice Served])
+        UC7([View Earliest Possession Date])
+        UC8([Confirm Legal Declaration])
+        UC9([Record Notice Served])
+    end
+
+    subgraph Mandatory Grounds
+        G1([Ground 8 - Rent Arrears 2 Months Plus])
+        G2([Ground 7A - Serious ASB])
+        G3([Ground 1 - Landlord Moving In])
+        G4([Ground 1A - Landlord Selling])
+        G5([Ground 6 - Redevelopment])
+    end
+
+    subgraph Discretionary Grounds
+        G6([Ground 14 - ASB No Conviction])
+        G7([Ground 13 - Property Damage])
+        G8([Ground 12 - Breach of Terms])
+        G9([Ground 10 and 11 - Persistent Arrears])
+        G10([Ground 17 - False Statement])
+    end
+
+    Landlord --> UC1
+    UC1 --> G1
+    UC1 --> G2
+    UC1 --> G3
+    UC1 --> G4
+    UC1 --> G5
+    UC1 --> G6
+    UC1 --> G7
+    UC1 --> G8
+    UC1 --> G9
+    UC1 --> G10
+    UC1 --> UC2
+    UC2 --> UC3
+    UC2 --> UC4
+    Landlord --> UC5
+    Landlord --> UC6
+    UC6 --> UC7
+    Landlord --> UC8
+    UC8 --> UC9

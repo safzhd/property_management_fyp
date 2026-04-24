@@ -1,0 +1,39 @@
+graph LR
+    Landlord(("👤 Landlord"))
+    System(("⚙️ System"))
+
+    subgraph Compliance Actions
+        UC1([Mark How to Rent Provided])
+        UC2([Mark Tenant Info Sheet Provided])
+        UC3([Record Deposit Protection Date])
+        UC4([Upload Signed Tenancy Agreement])
+    end
+
+    subgraph System Behaviour
+        UC5([Check Compliance Blockers])
+        UC6([Grey Out Advance Button])
+        UC7([Show Tooltip with Blockers])
+        UC8([Activate Advance Button])
+    end
+
+    subgraph Lifecycle Advance
+        UC9([Advance to Onboarding])
+        UC10([Advance to Active])
+    end
+
+    Landlord --> UC1
+    Landlord --> UC2
+    Landlord --> UC3
+    Landlord --> UC4
+    System --> UC5
+    UC5 --> UC6
+    UC6 --> UC7
+    UC1 --> UC5
+    UC2 --> UC5
+    UC3 --> UC5
+    UC4 --> UC5
+    UC5 --> UC8
+    UC8 --> UC9
+    UC8 --> UC10
+    Landlord --> UC9
+    Landlord --> UC10

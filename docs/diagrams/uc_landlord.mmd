@@ -1,0 +1,74 @@
+graph LR
+    Landlord(("👤 Landlord"))
+
+    subgraph Authentication
+        UC1([Log In])
+        UC2([Log Out])
+    end
+
+    subgraph Properties
+        UC3([Add Property])
+        UC4([View All Properties])
+        UC5([Edit Property])
+        UC6([Archive Property])
+        UC7([Add Photos])
+    end
+
+    subgraph Rooms
+        UC8([Add Room to HMO])
+        UC9([View Rooms])
+        UC10([Edit Room])
+    end
+
+    subgraph Tenancies
+        UC11([Create Tenancy])
+        UC12([View Tenancy Detail])
+        UC13([Advance Lifecycle Status])
+        UC14([Send Contract Email])
+        UC15([Upload Signed Contract])
+        UC16([Mark Compliance Items])
+        UC17([Serve Section 8 Notice])
+        UC18([Cancel Tenancy])
+    end
+
+    subgraph Finance
+        UC19([Add Transaction])
+        UC20([View P and L Summary])
+        UC21([Export CSV])
+    end
+
+    subgraph Documents
+        UC22([Upload Document])
+        UC23([View Documents])
+    end
+
+    subgraph Compliance
+        UC24([Add Certificate])
+        UC25([View Expiry Dates])
+    end
+
+    Landlord --> UC1
+    Landlord --> UC2
+    Landlord --> UC3
+    Landlord --> UC4
+    Landlord --> UC5
+    Landlord --> UC6
+    Landlord --> UC7
+    Landlord --> UC8
+    Landlord --> UC9
+    Landlord --> UC10
+    Landlord --> UC11
+    Landlord --> UC12
+    Landlord --> UC13
+    Landlord --> UC14
+    Landlord --> UC15
+    Landlord --> UC16
+    Landlord --> UC17
+    Landlord --> UC18
+    Landlord --> UC19
+    Landlord --> UC20
+    Landlord --> UC21
+    Landlord --> UC22
+    Landlord --> UC23
+    Landlord --> UC24
+    Landlord --> UC25

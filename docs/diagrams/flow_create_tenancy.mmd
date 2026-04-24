@@ -1,0 +1,31 @@
+flowchart TD
+    A([Start]) --> B[Tenancies List Page]
+    B --> C[Click New Tenancy]
+    C --> D[Step 1: Tenant]
+    D --> E{New or Existing Tenant?}
+    E -->|New| F[Enter Name, Email, Phone]
+    E -->|Existing| G[Select Tenant from List]
+    F --> H[Password Auto-Generated]
+    H --> I[Step 2: Property and Room]
+    G --> I
+    I --> J[Select Property]
+    J --> K[Select Available Room]
+    K --> L{Room Available?}
+    L -->|No - Greyed Out| K
+    L -->|Yes| M[Step 3: Tenancy Terms]
+    M --> N{Tenancy Type?}
+    N -->|Periodic| O[No End Date Required]
+    N -->|Fixed Term| P[Enter End Date]
+    O --> Q[Step 4: Rent and Deposit]
+    P --> Q
+    Q --> R[Enter Rent Amount and Frequency]
+    R --> S[Enter Deposit Amount]
+    S --> T[Select Deposit Scheme]
+    T --> U[Enter Deposit Reference]
+    U --> V[Step 5: Review]
+    V --> W[Review All Details]
+    W --> X{Correct?}
+    X -->|No - Go Back| D
+    X -->|Yes| Y[Submit]
+    Y --> Z[Tenancy Created - Draft Status]
+    Z --> AA([End])

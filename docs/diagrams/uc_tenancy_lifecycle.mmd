@@ -1,0 +1,19 @@
+stateDiagram-v2
+    [*] --> Pending : Tenancy Created
+
+    Pending --> Onboarding : Compliance Met\n(How to Rent, TIS, Deposit Protected)
+    Pending --> Cancelled : Admin Cancellation\n(Error / Never Started)
+
+    Onboarding --> Active : Signed Contract Uploaded\n+ Landlord Approves
+    Onboarding --> Cancelled : Admin Cancellation
+
+    Active --> Notice : Section 8 Notice Served\n(Legal Ground Selected)
+    Active --> Cancelled : Mutual Surrender /\nDeed of Surrender
+
+    Notice --> Offboarding : Notice Period Expires /\nPossession Order Granted
+    Notice --> Active : Notice Withdrawn
+
+    Offboarding --> Ended : Property Vacated\nDeposit Returned
+
+    Cancelled --> [*]
+    Ended --> [*]

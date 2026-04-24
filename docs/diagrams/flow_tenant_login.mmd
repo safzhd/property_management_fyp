@@ -1,0 +1,25 @@
+flowchart TD
+    A([Start]) --> B[Landing Page]
+    B --> C[Click Log In as Tenant]
+    C --> D[Login Page]
+    D --> E[Enter Email]
+    E --> F[Enter Auto-Generated Password]
+    F --> G[Submit]
+    G --> H{Valid Credentials?}
+    H -->|No| I[Error Message Shown]
+    I --> D
+    H -->|Yes| J[JWT Token Issued]
+    J --> K[Redirect to My Tenancy]
+    K --> L[View Tenancy Details]
+    L --> M{View}
+    M -->|Rent Info| N[View Rent Amount and Frequency]
+    M -->|Dates| O[View Start and End Date]
+    M -->|Status| P[View Lifecycle Status]
+    M -->|Documents| Q[View Tenancy Agreement]
+    Q --> R[View Uploaded Documents]
+    M -->|Log Out| S[Token Cleared]
+    S --> B
+    N --> T([Continue Viewing])
+    O --> T
+    P --> T
+    R --> T

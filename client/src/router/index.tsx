@@ -13,6 +13,9 @@ import TenanciesPage from '@/features/tenancies/TenanciesPage'
 import AddTenancyPage from '@/features/tenancies/AddTenancyPage'
 import TenancyDetailPage from '@/features/tenancies/TenancyDetailPage'
 import TransactionsPage from '@/features/transactions/TransactionsPage'
+import DashboardPage from '@/features/dashboard/DashboardPage'
+import DocumentsPage from '@/features/documents/DocumentsPage'
+import NotificationsPage from '@/features/notifications/NotificationsPage'
 
 // ── Stub pages (replaced one by one as we build) ────────────────────────────
 const Stub = ({ label }: { label: string }) => (
@@ -21,13 +24,7 @@ const Stub = ({ label }: { label: string }) => (
   </div>
 )
 
-const DashboardPage      = () => <Stub label="Dashboard" />
-const RoomsPage          = () => <Stub label="Rooms" />
-const PaymentsPage       = () => <Stub label="Payments" />  // legacy stub
-const MaintenancePage    = () => <Stub label="Maintenance" />
-const CompliancePage     = () => <Stub label="Compliance" />
-const DocumentsPage      = () => <Stub label="Documents" />
-const NotificationsPage  = () => <Stub label="Notifications" />
+const RoomsPage = () => <Stub label="Rooms" />
 const MyTenancyPage      = () => <Stub label="My Tenancy" />
 const AdminPage          = () => <Stub label="Admin" />
 const UnauthorizedPage   = () => (
@@ -78,12 +75,9 @@ export const router = createBrowserRouter([
       { path: 'tenancies',           element: <TenanciesPage /> },
       { path: 'tenancies/new',       element: <AddTenancyPage /> },
       { path: 'tenancies/:id',       element: <TenancyDetailPage /> },
-      { path: 'transactions',  element: <TransactionsPage /> },
-      { path: 'payments',      element: <PaymentsPage /> },
-      { path: 'compliance',    element: <CompliancePage /> },
-      { path: 'maintenance',   element: <MaintenancePage /> },
-      { path: 'documents',     element: <DocumentsPage /> },
-      { path: 'notifications', element: <NotificationsPage /> },
+      { path: 'transactions',        element: <TransactionsPage /> },
+      { path: 'documents',           element: <DocumentsPage /> },
+      { path: 'notifications',       element: <NotificationsPage /> },
     ],
   },
 
@@ -178,17 +172,7 @@ export const router = createBrowserRouter([
               </RoleGate>
             ),
           },
-          {
-            path: 'compliance',
-            element: (
-              <RoleGate allowedRoles={['admin', 'landlord']}>
-                <CompliancePage />
-              </RoleGate>
-            ),
-          },
-
           // ── All roles ─────────────────────────────────────────────────
-          { path: 'maintenance',   element: <MaintenancePage /> },
           { path: 'documents',     element: <DocumentsPage /> },
           { path: 'notifications', element: <NotificationsPage /> },
 

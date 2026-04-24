@@ -34,13 +34,22 @@ export interface Document {
   updatedAt: string
 }
 
+export async function getAllDocuments(params?: {
+  propertyId?: string
+  tenancyId?: string
+  documentType?: DocumentType
+}): Promise<Document[]> {
+  const { data } = await api.get<{ documents: Document[] }>('/documents', { params })
+  return data.documents
+}
+
 export async function getPropertyDocuments(propertyId: string): Promise<Document[]> {
   const { data } = await api.get<{ documents: Document[] }>(`/documents/property/${propertyId}`)
   return data.documents
 }
 
 export async function uploadDocument(
-  propertyId: string,
+  propertyId: string | undefined,
   file: File,
   documentType: DocumentType,
   description?: string,
@@ -48,7 +57,7 @@ export async function uploadDocument(
 ): Promise<Document> {
   const form = new FormData()
   form.append('file', file)
-  form.append('propertyId', propertyId)
+  if (propertyId) form.append('propertyId', propertyId)
   form.append('documentType', documentType)
   if (description) form.append('description', description)
   if (roomId) form.append('roomId', roomId)

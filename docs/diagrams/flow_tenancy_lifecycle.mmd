@@ -1,0 +1,33 @@
+flowchart TD
+    A([Start]) --> B[Tenancy Created]
+    B --> C[Status: Draft]
+    C --> D[Landlord Sends Contract Email]
+    D --> E[Tenant Signs Contract]
+    E --> F[Landlord Uploads Signed Contract]
+    F --> G{All Onboarding\nCompliance Met?}
+    G -->|No| H[Compliance Blockers Shown]
+    H --> I[Mark How to Rent Provided]
+    I --> J[Mark Tenant Info Sheet Provided]
+    J --> K[Record Deposit Protection Date]
+    K --> G
+    G -->|Yes| L[Advance Button Active]
+    L --> M[Landlord Clicks Advance to Onboarding]
+    M --> N[Status: Onboarding]
+    N --> O{Active Compliance Met?}
+    O -->|No| P[Compliance Blockers Shown]
+    P --> O
+    O -->|Yes| Q[Advance Button Active]
+    Q --> R[Landlord Clicks Advance to Active]
+    R --> S[Status: Active]
+    S --> T{Action Required?}
+    T -->|Serve Notice| U[Serve Section 8 Notice]
+    U --> V[Status: Notice Served]
+    V --> W[Court Proceedings if Required]
+    W --> X[Tenant Vacates]
+    X --> Y[Status: Ended]
+    T -->|Cancel| Z{Cancel Reason}
+    Z -->|Mutual Agreement| Y
+    Z -->|Entered in Error| Y
+    Z -->|Never Commenced| Y
+    T -->|Tenancy Ends Naturally| Y
+    Y --> AA([End])

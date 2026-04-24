@@ -1,0 +1,50 @@
+graph LR
+    Landlord(("👤 Landlord"))
+
+    subgraph Step 1 - Tenant
+        UC1([Create New Tenant])
+        UC2([Select Existing Tenant])
+        UC3([Auto-Generate Password])
+    end
+
+    subgraph Step 2 - Property and Room
+        UC4([Select Property])
+        UC5([Select Available Room])
+        UC6([View Occupied Rooms as Disabled])
+    end
+
+    subgraph Step 3 - Tenancy Terms
+        UC7([Set Periodic Tenancy])
+        UC8([Set Fixed Term Tenancy])
+        UC9([Enter End Date])
+    end
+
+    subgraph Step 4 - Rent and Deposit
+        UC10([Enter Rent Amount])
+        UC11([Set Rent Frequency])
+        UC12([Enter Deposit Amount])
+        UC13([Select Deposit Scheme])
+        UC14([Enter Deposit Reference])
+    end
+
+    subgraph Step 5 - Review
+        UC15([Review All Details])
+        UC16([Submit and Create Tenancy])
+    end
+
+    Landlord --> UC1
+    Landlord --> UC2
+    UC1 --> UC3
+    Landlord --> UC4
+    UC4 --> UC5
+    UC4 --> UC6
+    Landlord --> UC7
+    Landlord --> UC8
+    UC8 --> UC9
+    Landlord --> UC10
+    Landlord --> UC11
+    Landlord --> UC12
+    Landlord --> UC13
+    Landlord --> UC14
+    Landlord --> UC15
+    UC15 --> UC16

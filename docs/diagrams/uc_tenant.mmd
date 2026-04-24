@@ -1,0 +1,28 @@
+graph LR
+    Tenant(("👤 Tenant"))
+
+    subgraph Authentication
+        UC1([Log In])
+        UC2([Log Out])
+    end
+
+    subgraph My Tenancy
+        UC3([View Tenancy Details])
+        UC4([View Rent Amount and Frequency])
+        UC5([View Tenancy Start and End Date])
+        UC6([View Lifecycle Status])
+    end
+
+    subgraph Documents
+        UC7([View Tenancy Agreement])
+        UC8([View Uploaded Documents])
+    end
+
+    Tenant --> UC1
+    Tenant --> UC2
+    Tenant --> UC3
+    Tenant --> UC4
+    Tenant --> UC5
+    Tenant --> UC6
+    Tenant --> UC7
+    Tenant --> UC8

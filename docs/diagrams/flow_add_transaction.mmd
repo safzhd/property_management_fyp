@@ -1,0 +1,27 @@
+flowchart TD
+    A([Start]) --> B[Transactions Page]
+    B --> C[Click Add Transaction]
+    C --> D[Add Transaction Modal Opens]
+    D --> E{Transaction Type?}
+    E -->|Income| F[Income Categories Available]
+    E -->|Expense| G[Expense Categories Available]
+    F --> H[Select Category]
+    G --> H
+    H --> I[Select Property]
+    I --> J[Enter Amount]
+    J --> K[Enter Date]
+    K --> L[Enter Description]
+    L --> M{Type is Expense?}
+    M -->|Yes| N[Enter Supplier Name]
+    N --> O[Select Payment Method]
+    M -->|No| O
+    O --> P[Select Status]
+    P --> Q{Status is Scheduled?}
+    Q -->|Yes| R[Reference Optional]
+    Q -->|No| R
+    R --> S[Click Save Transaction]
+    S --> T[Transaction Saved to Database]
+    T --> U[Modal Closes]
+    U --> V[Transactions List Refreshes]
+    V --> W[Summary Cards Update]
+    W --> X([End])

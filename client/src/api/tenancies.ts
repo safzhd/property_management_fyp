@@ -61,3 +61,7 @@ export async function createTenantUser(payload: CreateTenantPayload): Promise<Te
   const { data } = await api.post<{ user: TenantUser }>('/users', payload)
   return data.user
 }
+
+export async function deleteTenancy(id: string): Promise<void> {
+  await api.delete(`/tenancies/${id}`)
+}

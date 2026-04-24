@@ -515,6 +515,49 @@ async function tenanciesRoutes(fastify, options) {
       return reply.code(500).send({ error: 'Failed to update compliance' });
     }
   });
+
+  // Delete tenancy (admin or owning landlord)
+  fastify.delete('/:id', {
+    onRequest: [fastify.authenticate],
+    schema: {
+      description: 'Permanently delete a tenancy',
+      tags: ['Tenancies'],
+      security: [{ bearerAuth: [] }],
+    }
+  }, async (request, reply) => {
+    try {
+      const [rows] = await pool.query(
+        `SELECT t.id, p.landlord_id
+         FROM tenancies t
+         JOIN properties p ON t.property_id = p.id
+         WHERE t.id = ?`,
+        [request.params.id]
+      );
+
+      if (rows.length === 0) {
+        return reply.code(404).send({ error: 'Tenancy not found' });
+      }
+
+      if (request.user.role !== 'admin' && rows[0].landlord_id !== request.user.id) {
+        return reply.code(403).send({ error: 'Forbidden' });
+      }
+
+      const id = request.params.id;
+      const conn = await pool.getConnection();
+      try {
+        await conn.query('SET FOREIGN_KEY_CHECKS = 0');
+        await conn.query('DELETE FROM tenancies WHERE id = ?', [id]);
+        await conn.query('SET FOREIGN_KEY_CHECKS = 1');
+      } finally {
+        conn.release();
+      }
+
+      return reply.send({ message: 'Tenancy deleted' });
+    } catch (error) {
+      fastify.log.error(error);
+      return reply.code(500).send({ error: 'Failed to delete tenancy' });
+    }
+  });
 }
 
 function formatTenancy(t) {

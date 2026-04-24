@@ -1,0 +1,22 @@
+flowchart TD
+    A([Start]) --> B[Tenancy Detail Page]
+    B --> C[Click Serve Section 8 Notice]
+    C --> D[Serve Notice Modal Opens]
+    D --> E[Select Section 8 Ground]
+    E --> F{Ground Type?}
+    F -->|Mandatory| G[Mandatory Ground Info Shown]
+    F -->|Discretionary| H[Discretionary Ground Info Shown]
+    G --> I[View Required Documents]
+    H --> I
+    I --> J[View Notice Period]
+    J --> K[Enter Supporting Details]
+    K --> L[Set Date Notice Served]
+    L --> M[Earliest Possession Date Calculated]
+    M --> N[Read Legal Declaration]
+    N --> O{Confirm Declaration?}
+    O -->|No| N
+    O -->|Yes| P[Click Record Notice Served]
+    P --> Q[Notice Saved to Database]
+    Q --> R[Status: Notice Served]
+    R --> S[Notice Date and Ground Shown on Tenancy]
+    S --> T([End])

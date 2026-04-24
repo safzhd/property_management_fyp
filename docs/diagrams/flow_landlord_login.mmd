@@ -1,0 +1,21 @@
+flowchart TD
+    A([Start]) --> B[Landing Page]
+    B --> C[Click Log In]
+    C --> D[Login Page]
+    D --> E[Enter Email and Password]
+    E --> F[Submit]
+    F --> G{Valid Credentials?}
+    G -->|No| H[Error Message Shown]
+    H --> D
+    G -->|Yes| I[JWT Token Issued]
+    I --> J[Redirect to Dashboard]
+    J --> K[View Properties Overview]
+    K --> L{Navigate To}
+    L -->|Properties| M[Properties List]
+    L -->|Tenancies| N[Tenancies List]
+    L -->|Transactions| O[Transactions Page]
+    L -->|Log Out| P[Token Cleared]
+    P --> B
+    M --> Q([Continue Using App])
+    N --> Q
+    O --> Q
