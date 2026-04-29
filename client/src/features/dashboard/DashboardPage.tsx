@@ -386,6 +386,11 @@ function ActivityFeed({ events }: { events: ActivityEvent[] }) {
                 <div className="flex items-center gap-1.5 mb-0.5">
                   {EVENT_ICON[event.type]}
                   <p className="text-xs font-semibold text-gray-800">{event.title}</p>
+                  {event.paidLate && (
+                    <span className="px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-yellow-100 text-yellow-700">
+                      Paid Late
+                    </span>
+                  )}
                 </div>
                 <p className="text-xs text-gray-400 truncate">{event.description}</p>
               </div>

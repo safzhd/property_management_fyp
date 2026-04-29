@@ -35,6 +35,7 @@ export interface ActivityEvent {
   initials:    string
   tenancyId:   string | null
   createdAt:   string
+  paidLate?:   boolean
 }
 
 export async function getActivity(): Promise<{ events: ActivityEvent[]; count: number }> {

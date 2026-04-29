@@ -166,9 +166,14 @@ export function Header() {
                           {ev.initials}
                         </div>
                         <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-1.5">
+                          <div className="flex items-center gap-1.5 flex-wrap">
                             <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${EVENT_DOT[ev.type]}`} />
                             <p className="text-xs font-medium text-gray-800 truncate">{ev.title}</p>
+                            {ev.paidLate && (
+                              <span className="px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-yellow-100 text-yellow-700">
+                                Paid Late
+                              </span>
+                            )}
                           </div>
                           <p className="text-[11px] text-gray-500 mt-0.5 truncate">{ev.description}</p>
                           <p className="text-[10px] text-gray-400 mt-0.5">{timeAgo(ev.createdAt)}</p>

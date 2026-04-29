@@ -343,7 +343,33 @@ async function notificationsRoutes(fastify, options) {
           [userId]
         );
 
+        const [paidLateTenant] = await pool.query(
+          `SELECT tx.id, tx.amount, tx.date, tx.created_at,
+                  COALESCE(p.property_name, p.address_line_1) AS property_name,
+                  DATEDIFF(tx.created_at, tx.date) AS days_late
+           FROM transactions tx
+           JOIN tenancies t ON tx.tenancy_id = t.id
+           JOIN properties p ON tx.property_id = p.id
+           WHERE t.tenant_id = ?
+             AND tx.category = 'rent'
+             AND tx.status IN ('paid','reconciled')
+             AND DATEDIFF(tx.created_at, tx.date) > 5
+             AND tx.created_at >= DATE_SUB(NOW(), INTERVAL 60 DAY)`,
+          [userId]
+        );
+
         const tenantAlerts = [];
+        for (const tx of paidLateTenant) {
+          tenantAlerts.push({
+            id: `paid-late-${tx.id}`,
+            type: 'rent_paid_late',
+            severity: 'warning',
+            title: 'Rent Paid Late',
+            message: `Your £${Number(tx.amount).toFixed(0)} rent at ${tx.property_name} was paid ${tx.days_late} day${tx.days_late !== 1 ? 's' : ''} late. Please ensure future payments are on time.`,
+            tenancyId: null,
+            createdAt: tx.created_at,
+          });
+        }
         for (const tx of dueTomorrow) {
           tenantAlerts.push({
             id: `rent-due-${tx.id}`,
@@ -648,11 +674,12 @@ async function notificationsRoutes(fastify, options) {
 
       // 3. Rent payments received
       const [payments] = await pool.query(`
-        SELECT tx.id AS entity_id, tx.created_at, tx.amount,
+        SELECT tx.id AS entity_id, tx.created_at, tx.amount, tx.date AS due_date,
                CONCAT(u.given_name, ' ', u.last_name) AS tenant_name,
                u.given_name, u.last_name,
                COALESCE(p.property_name, p.address_line_1) AS property_name,
-               t.id AS tenancy_id
+               t.id AS tenancy_id,
+               DATEDIFF(tx.created_at, tx.date) AS days_late
         FROM transactions tx
         JOIN properties p ON tx.property_id = p.id
         LEFT JOIN tenancies t ON tx.tenancy_id = t.id
@@ -702,6 +729,7 @@ async function notificationsRoutes(fastify, options) {
           initials:    `${(row.given_name || '?')[0]}${(row.last_name || '?')[0]}`.toUpperCase(),
           tenancyId:   row.tenancy_id,
           createdAt:   row.created_at,
+          paidLate:    row.days_late > 5,
         });
       }
 
