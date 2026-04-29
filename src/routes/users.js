@@ -31,14 +31,15 @@ async function usersRoutes(fastify, options) {
   }, async (request, reply) => {
     try {
       const validated = createTenantSchema.parse(request.body);
+      const email = validated.email.toLowerCase();
 
       const [existing] = await pool.query(
         'SELECT id FROM users WHERE email = ?',
-        [validated.email]
+        [email]
       );
 
       if (existing.length > 0) {
-        return reply.code(400).send({ error: 'Email already registered' });
+        return reply.code(409).send({ error: 'An account with this email already exists. Use "Existing Tenant" to link them instead.' });
       }
 
       const id = generateUUID();
@@ -47,7 +48,7 @@ async function usersRoutes(fastify, options) {
       await pool.query(
         `INSERT INTO users (id, email, password_hash, role, given_name, middle_name, last_name, phone)
          VALUES (?, ?, ?, 'tenant', ?, ?, ?, ?)`,
-        [id, validated.email, passwordHash, validated.givenName, validated.middleName || null, validated.lastName, validated.phone || null]
+        [id, email, passwordHash, validated.givenName, validated.middleName || null, validated.lastName, validated.phone || null]
       );
 
       const [users] = await pool.query(

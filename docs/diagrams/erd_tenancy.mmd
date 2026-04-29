@@ -1,0 +1,143 @@
+erDiagram
+    users {
+        char id PK
+        varchar email
+        varchar password_hash
+        enum role
+        varchar given_name
+        varchar middle_name
+        varchar last_name
+        varchar phone
+        text profile_image_url
+        boolean is_active
+        boolean email_verified
+        datetime email_verified_at
+        datetime last_login_at
+        datetime created_at
+        datetime updated_at
+    }
+
+    properties {
+        char id PK
+        char landlord_id FK
+        varchar property_name
+        enum property_type
+        varchar door_number
+        varchar address_line_1
+        varchar address_line_2
+        varchar city
+        varchar county
+        varchar postcode
+        varchar country
+        boolean is_hmo
+        boolean hmo_licence_required
+        varchar hmo_licence_number
+        date hmo_licence_expiry
+        int hmo_max_occupants
+        boolean prs_registered
+        varchar prs_registration_number
+        date prs_registration_date
+        int total_rooms
+        int total_bathrooms
+        enum status
+        datetime created_at
+        datetime updated_at
+    }
+
+    rooms {
+        char id PK
+        char property_id FK
+        varchar room_name
+        int room_number
+        int floor_level
+        decimal room_size_sqm
+        int max_occupancy
+        enum room_type
+        json amenities
+        decimal rent_amount
+        boolean bills_included
+        decimal deposit_amount
+        boolean is_available
+        datetime created_at
+        datetime updated_at
+    }
+
+    tenancies {
+        char id PK
+        char tenant_id FK
+        char property_id FK
+        char room_id FK
+        date start_date
+        date end_date
+        enum tenancy_type
+        int notice_period_weeks
+        enum lifecycle_status
+        date notice_served_date
+        enum notice_served_by
+        varchar eviction_grounds
+        decimal rent_amount
+        enum rent_frequency
+        int rent_due_day
+        decimal deposit_amount
+        enum deposit_scheme
+        varchar deposit_reference
+        date deposit_protected_date
+        boolean tenant_info_sheet_provided
+        date tenant_info_sheet_date
+        boolean how_to_rent_guide_provided
+        boolean pet_request_received
+        enum pet_request_decision
+        text pet_request_reason
+        datetime created_at
+        datetime updated_at
+    }
+
+    compliance_certificates {
+        char id PK
+        char property_id FK
+        char document_id FK
+        enum certificate_type
+        varchar certificate_number
+        date issue_date
+        date expiry_date
+        varchar contractor_name
+        varchar contractor_company
+        varchar contractor_registration
+        varchar contractor_phone
+        varchar contractor_email
+        decimal cost
+        enum status
+        int reminder_days_before
+        boolean reminder_sent
+        text notes
+        datetime created_at
+        datetime updated_at
+    }
+
+    documents {
+        char id PK
+        char property_id FK
+        char tenancy_id FK
+        char compliance_certificate_id FK
+        char maintenance_request_id FK
+        char uploaded_by FK
+        varchar file_name
+        enum document_type
+        text storage_path
+        int file_size
+        varchar mime_type
+        text description
+        datetime created_at
+        datetime updated_at
+    }
+
+    users ||--o{ properties : "landlord owns"
+    users ||--o{ tenancies : "tenant in"
+    users ||--o{ documents : "uploaded by"
+    properties ||--o{ rooms : "contains"
+    properties ||--o{ tenancies : "subject of"
+    properties ||--o{ compliance_certificates : "holds"
+    properties ||--o{ documents : "has"
+    rooms ||--o{ tenancies : "occupied by"
+    tenancies ||--o{ documents : "has"
+    compliance_certificates ||--o| documents : "evidenced by"

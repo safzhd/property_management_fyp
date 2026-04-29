@@ -16,6 +16,14 @@ import TransactionsPage from '@/features/transactions/TransactionsPage'
 import DashboardPage from '@/features/dashboard/DashboardPage'
 import DocumentsPage from '@/features/documents/DocumentsPage'
 import NotificationsPage from '@/features/notifications/NotificationsPage'
+import MyTenancyPage from '@/features/tenant/MyTenancyPage'
+
+// ── Role-aware default redirect ──────────────────────────────────────────────
+function DefaultRedirect() {
+  const user = useAuthStore((s) => s.user)
+  if (user?.role === 'tenant') return <Navigate to="/app/my-tenancy" replace />
+  return <Navigate to="/app/dashboard" replace />
+}
 
 // ── Stub pages (replaced one by one as we build) ────────────────────────────
 const Stub = ({ label }: { label: string }) => (
@@ -25,7 +33,6 @@ const Stub = ({ label }: { label: string }) => (
 )
 
 const RoomsPage = () => <Stub label="Rooms" />
-const MyTenancyPage      = () => <Stub label="My Tenancy" />
 const AdminPage          = () => <Stub label="Admin" />
 const UnauthorizedPage   = () => (
   <div className="flex h-full flex-col items-center justify-center gap-2 p-8">
@@ -89,7 +96,7 @@ export const router = createBrowserRouter([
       {
         element: <AppShell />,
         children: [
-          { index: true, element: <Navigate to="/app/dashboard" replace /> },
+          { index: true, element: <DefaultRedirect /> },
 
           // ── Landlord + Admin ───────────────────────────────────────────
           {

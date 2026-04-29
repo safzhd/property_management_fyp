@@ -28,9 +28,9 @@ const navItems: NavItem[] = [
   { label: 'Properties',    to: '/app/properties',    icon: Building2,        roles: ['admin', 'landlord'] },
   { label: 'Tenancies',     to: '/app/tenancies',     icon: FileText,         roles: ['admin', 'landlord'] },
   { label: 'Transactions',  to: '/app/transactions',  icon: ArrowLeftRight,   roles: ['admin', 'landlord'] },
-  { label: 'Documents',     to: '/app/documents',     icon: FolderOpen,       roles: ['admin', 'landlord', 'tenant'] },
-  { label: 'Notifications', to: '/app/notifications', icon: Bell,             roles: ['admin', 'landlord', 'tenant'] },
   { label: 'My Tenancy',    to: '/app/my-tenancy',    icon: Home,             roles: ['tenant'] },
+  { label: 'Documents',     to: '/app/documents',     icon: FolderOpen,       roles: ['admin', 'landlord'] },
+  { label: 'Notifications', to: '/app/notifications', icon: Bell,             roles: ['admin', 'landlord', 'tenant'] },
   { label: 'Admin',         to: '/app/admin',         icon: Settings,         roles: ['admin'] },
 ]
 

@@ -1,9 +1,11 @@
 import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
-import { Building2, FileText, TrendingUp, TrendingDown, Plus, ArrowRight } from 'lucide-react'
+import { Building2, FileText, TrendingUp, TrendingDown, Plus, ArrowRight, AlertTriangle, AlertCircle, FileCheck, PoundSterling, Home } from 'lucide-react'
 import { getProperties } from '@/api/properties'
 import { getTenancies } from '@/api/tenancies'
 import { getTransactionSummary } from '@/api/transactions'
+import { getSmartAlerts, getActivity } from '@/api/notifications'
+import type { ActivityEvent } from '@/api/notifications'
 import { useAuthStore } from '@/store/authStore'
 import type { LifecycleStatus } from '@/types/tenancy'
 import { cn } from '@/lib/utils'
@@ -58,8 +60,24 @@ export default function DashboardPage() {
 
   const { data: summary } = useQuery({
     queryKey: ['transactions-summary', year],
-    queryFn: () => getTransactionSummary(year),
+    queryFn: () => getTransactionSummary({ yearFrom: year, yearTo: year }),
   })
+
+  const { data: activityData } = useQuery({
+    queryKey: ['activity'],
+    queryFn: () => getActivity(),
+    refetchInterval: 60_000,
+  })
+
+  const { data: alertsData } = useQuery({
+    queryKey: ['smart-alerts'],
+    queryFn: () => getSmartAlerts(),
+    refetchInterval: 60_000,
+  })
+
+  const defects = (alertsData?.alerts ?? []).filter(
+    (a) => a.severity === 'high' || a.severity === 'warning'
+  )
 
   const activeProperties = properties.filter((p) => p.status !== 'archived')
   const activeTenancies  = tenancies.filter((t) => t.lifecycleStatus === 'active')
@@ -123,6 +141,55 @@ export default function DashboardPage() {
           colour={net >= 0 ? 'sky' : 'red'}
         />
       </div>
+
+      {/* Defects / Active Alerts */}
+      {defects.length > 0 && (
+        <div className="bg-white rounded-xl border border-red-200 p-5">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 text-red-500" />
+              <h2 className="text-sm font-semibold text-gray-900">Active Alerts</h2>
+              <span className="ml-1 text-xs font-semibold bg-red-100 text-red-600 px-2 py-0.5 rounded-full">
+                {defects.length}
+              </span>
+            </div>
+            <Link to="/app/notifications" className="text-xs text-sky-600 hover:underline flex items-center gap-1">
+              View all <ArrowRight className="w-3 h-3" />
+            </Link>
+          </div>
+          <div className="space-y-2">
+            {defects.map((alert) => {
+              const isHigh = alert.severity === 'high'
+              return (
+                <Link
+                  key={alert.id}
+                  to={`/app/tenancies/${alert.tenancyId}`}
+                  className={cn(
+                    'flex items-start gap-3 p-3 rounded-lg border transition-colors hover:brightness-95',
+                    isHigh
+                      ? 'bg-red-50 border-red-200'
+                      : 'bg-amber-50 border-amber-200'
+                  )}
+                >
+                  <AlertCircle className={cn('w-4 h-4 mt-0.5 shrink-0', isHigh ? 'text-red-500' : 'text-amber-500')} />
+                  <div className="min-w-0">
+                    <p className={cn('text-sm font-semibold', isHigh ? 'text-red-700' : 'text-amber-700')}>
+                      {alert.title}
+                    </p>
+                    <p className="text-xs text-gray-500 mt-0.5">{alert.message}</p>
+                  </div>
+                  <span className={cn(
+                    'ml-auto text-xs font-semibold px-2 py-0.5 rounded-full shrink-0',
+                    isHigh ? 'bg-red-100 text-red-600' : 'bg-amber-100 text-amber-700'
+                  )}>
+                    {isHigh ? 'High' : 'Warning'}
+                  </span>
+                </Link>
+              )
+            })}
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Tenancy pipeline */}
@@ -194,6 +261,9 @@ export default function DashboardPage() {
         </div>
       </div>
 
+      {/* Activity feed */}
+      <ActivityFeed events={activityData?.events ?? []} />
+
       {/* Quick actions */}
       <div className="bg-white rounded-xl border border-gray-200 p-5">
         <h2 className="text-sm font-semibold text-gray-900 mb-3">Quick Actions</h2>
@@ -238,5 +308,97 @@ function QuickAction({ to, label }: { to: string; label: string }) {
       <Plus className="w-3.5 h-3.5" />
       {label}
     </Link>
+  )
+}
+
+// ── Activity Feed ─────────────────────────────────────────────────────────────
+
+const AVATAR_COLOURS = [
+  'bg-sky-100 text-sky-700',
+  'bg-violet-100 text-violet-700',
+  'bg-emerald-100 text-emerald-700',
+  'bg-amber-100 text-amber-700',
+  'bg-rose-100 text-rose-700',
+  'bg-teal-100 text-teal-700',
+]
+
+function avatarColour(name: string) {
+  let hash = 0
+  for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash)
+  return AVATAR_COLOURS[Math.abs(hash) % AVATAR_COLOURS.length]
+}
+
+function timeAgo(iso: string): string {
+  const diff = Date.now() - new Date(iso).getTime()
+  const mins = Math.floor(diff / 60000)
+  if (mins < 1)  return 'Just now'
+  if (mins < 60) return `${mins}m ago`
+  const hrs = Math.floor(mins / 60)
+  if (hrs < 24)  return `${hrs}h ago`
+  const days = Math.floor(hrs / 24)
+  if (days === 1) return 'Yesterday'
+  if (days < 7)  return `${days}d ago`
+  return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
+}
+
+const EVENT_ICON: Record<ActivityEvent['type'], React.ReactNode> = {
+  tenancy_created:   <Home        className="w-3.5 h-3.5 text-sky-500" />,
+  document_uploaded: <FileCheck   className="w-3.5 h-3.5 text-violet-500" />,
+  payment_received:  <PoundSterling className="w-3.5 h-3.5 text-emerald-500" />,
+}
+
+const EVENT_DOT: Record<ActivityEvent['type'], string> = {
+  tenancy_created:   'bg-sky-400',
+  document_uploaded: 'bg-violet-400',
+  payment_received:  'bg-emerald-400',
+}
+
+function ActivityFeed({ events }: { events: ActivityEvent[] }) {
+  return (
+    <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+      <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+        <h2 className="text-sm font-semibold text-gray-900">Recent Activity</h2>
+        <Link to="/app/notifications" className="text-xs text-sky-600 hover:underline flex items-center gap-1">
+          View all <ArrowRight className="w-3 h-3" />
+        </Link>
+      </div>
+
+      {events.length === 0 ? (
+        <p className="text-sm text-gray-400 text-center py-10">No recent activity</p>
+      ) : (
+        <div className="divide-y divide-gray-50">
+          {events.map(event => (
+            <div
+              key={event.id}
+              className={cn(
+                'flex items-center gap-3.5 px-5 py-3.5 hover:bg-gray-50 transition-colors',
+                event.tenancyId ? 'cursor-pointer' : ''
+              )}
+              onClick={() => event.tenancyId && (window.location.href = `/app/tenancies/${event.tenancyId}`)}
+            >
+              {/* Avatar */}
+              <div className={cn('w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold shrink-0', avatarColour(event.tenantName))}>
+                {event.initials}
+              </div>
+
+              {/* Content */}
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-1.5 mb-0.5">
+                  {EVENT_ICON[event.type]}
+                  <p className="text-xs font-semibold text-gray-800">{event.title}</p>
+                </div>
+                <p className="text-xs text-gray-400 truncate">{event.description}</p>
+              </div>
+
+              {/* Time + dot */}
+              <div className="flex items-center gap-2 shrink-0">
+                <span className="text-xs text-gray-400 whitespace-nowrap">{timeAgo(event.createdAt)}</span>
+                <span className={cn('w-1.5 h-1.5 rounded-full shrink-0', EVENT_DOT[event.type])} />
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
   )
 }

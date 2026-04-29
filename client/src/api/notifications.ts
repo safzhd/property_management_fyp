@@ -26,6 +26,22 @@ export interface Notification {
   createdAt: string
 }
 
+export interface ActivityEvent {
+  id:          string
+  type:        'tenancy_created' | 'document_uploaded' | 'payment_received'
+  title:       string
+  description: string
+  tenantName:  string
+  initials:    string
+  tenancyId:   string | null
+  createdAt:   string
+}
+
+export async function getActivity(): Promise<{ events: ActivityEvent[]; count: number }> {
+  const { data } = await api.get('/notifications/activity')
+  return data
+}
+
 export async function getSmartAlerts(): Promise<{ alerts: SmartAlert[]; count: number }> {
   const { data } = await api.get('/notifications/smart')
   return data

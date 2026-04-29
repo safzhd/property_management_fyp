@@ -1,11 +1,16 @@
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Plus, Download, TrendingUp, TrendingDown, PoundSterling,
-  Clock, Search, Trash2, ChevronDown
+  Clock, Search, Trash2, ChevronDown, Flag, Paperclip, X,
+  Building2, Tag, CalendarDays, CreditCard, User, FileText, StickyNote, ZoomIn
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { api } from '@/lib/axios'
 import { getTransactions, getTransactionSummary, deleteTransaction, getExportUrl } from '@/api/transactions'
+import { getAllDocuments } from '@/api/documents'
+import type { Document } from '@/api/documents'
+import { AuthImage } from '@/components/AuthImage'
 import { ALL_CATEGORY_LABELS } from '@/types/transaction'
 import type { Transaction, TransactionType } from '@/types/transaction'
 import AddTransactionModal from './AddTransactionModal'
@@ -54,17 +59,215 @@ function SummaryCard({
   )
 }
 
+const PAID_STATUSES = new Set(['paid', 'reconciled', 'refunded'])
+
+function isOverdue(tx: Transaction): boolean {
+  if (PAID_STATUSES.has(tx.status)) return false
+  const daysPast = (Date.now() - new Date(tx.date).getTime()) / 86400000
+  return daysPast > 10
+}
+
+const PAYMENT_METHOD_LABELS: Record<string, string> = {
+  bank_transfer:  'Bank Transfer',
+  standing_order: 'Standing Order',
+  card:           'Card',
+  cash:           'Cash',
+  cheque:         'Cheque',
+  other:          'Other',
+}
+
+function DetailRow({ label, value, icon: Icon }: { label: string; value: React.ReactNode; icon?: React.ElementType }) {
+  if (!value && value !== 0) return null
+  return (
+    <div className="flex items-start gap-3 py-2.5 border-b border-gray-100 last:border-0">
+      {Icon && <Icon className="w-3.5 h-3.5 text-gray-400 mt-0.5 shrink-0" />}
+      <span className="text-xs text-gray-500 w-28 shrink-0">{label}</span>
+      <span className="text-xs font-medium text-gray-800 text-right flex-1">{value}</span>
+    </div>
+  )
+}
+
+function TransactionDetailModal({
+  tx, receipt, onClose,
+}: {
+  tx: Transaction
+  receipt?: Document
+  onClose: () => void
+}) {
+  const isIncome = tx.type === 'income'
+  const overdue  = isOverdue(tx)
+  const [lightbox, setLightbox] = useState(false)
+
+  const isImage = receipt?.mimeType?.startsWith('image/')
+
+  async function handleReceiptDownload() {
+    if (!receipt) return
+    try {
+      const res = await api.get(`/documents/file/${receipt.id}`, { responseType: 'blob' })
+      const url = URL.createObjectURL(res.data)
+      const a = document.createElement('a')
+      a.href = url; a.download = receipt.fileName; a.click()
+      URL.revokeObjectURL(url)
+    } catch { toast.error('Failed to download receipt') }
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+      onClick={e => { if (e.target === e.currentTarget) onClose() }}
+    >
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] flex flex-col overflow-hidden">
+
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 shrink-0">
+          <div className="flex items-center gap-3">
+            <div className={cn(
+              'w-9 h-9 rounded-lg flex items-center justify-center shrink-0',
+              isIncome ? 'bg-emerald-50' : 'bg-red-50'
+            )}>
+              {isIncome
+                ? <TrendingUp className="w-4 h-4 text-emerald-600" />
+                : <TrendingDown className="w-4 h-4 text-red-500" />}
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-gray-900">
+                {tx.description || ALL_CATEGORY_LABELS[tx.category]}
+              </p>
+              <p className="text-xs text-gray-400">{ALL_CATEGORY_LABELS[tx.category]}</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className={cn('text-xs font-medium px-2 py-0.5 rounded-full', STATUS_STYLES[tx.status])}>
+              {tx.status.charAt(0).toUpperCase() + tx.status.slice(1)}
+            </span>
+            {overdue && (
+              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-semibold bg-red-100 text-red-600">
+                <Flag className="w-2.5 h-2.5" /> Overdue
+              </span>
+            )}
+            <button
+              onClick={onClose}
+              className="flex items-center justify-center w-7 h-7 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+
+        {/* Amount banner */}
+        <div className={cn(
+          'px-5 py-4 text-center border-b border-gray-100',
+          isIncome ? 'bg-emerald-50' : 'bg-red-50'
+        )}>
+          <p className={cn('text-2xl font-bold', isIncome ? 'text-emerald-700' : 'text-red-600')}>
+            {isIncome ? '+' : '-'}{formatCurrency(tx.amount)}
+          </p>
+          <p className="text-xs text-gray-500 mt-0.5">{formatDate(tx.date)}</p>
+        </div>
+
+        {/* Details */}
+        <div className="overflow-y-auto flex-1 px-5 py-4">
+          <div className="bg-gray-50 rounded-xl px-4">
+            <DetailRow label="Property"       value={tx.property}              icon={Building2} />
+            <DetailRow label="Category"       value={ALL_CATEGORY_LABELS[tx.category]} icon={Tag} />
+            <DetailRow label="Date"           value={formatDate(tx.date)}      icon={CalendarDays} />
+            <DetailRow label="Status"         value={tx.status.charAt(0).toUpperCase() + tx.status.slice(1)} icon={FileText} />
+            {tx.description && (
+              <DetailRow label="Description"  value={tx.description}           icon={StickyNote} />
+            )}
+            {tx.supplier && (
+              <DetailRow label="Supplier"     value={tx.supplier}              icon={User} />
+            )}
+            {tx.paymentMethod && (
+              <DetailRow label="Payment"      value={PAYMENT_METHOD_LABELS[tx.paymentMethod] ?? tx.paymentMethod} icon={CreditCard} />
+            )}
+            {tx.reference && (
+              <DetailRow label="Reference"    value={tx.reference}             icon={FileText} />
+            )}
+            {tx.notes && (
+              <DetailRow label="Notes"        value={tx.notes}                 icon={StickyNote} />
+            )}
+            {receipt && (
+              <div className="py-2.5">
+                <div className="flex items-center gap-3 mb-2">
+                  <Paperclip className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                  <span className="text-xs text-gray-500 w-28 shrink-0">Receipt</span>
+                  <button
+                    onClick={handleReceiptDownload}
+                    className="flex items-center gap-1 text-xs font-medium text-sky-600 hover:text-sky-800 transition-colors ml-auto"
+                  >
+                    <Download className="w-3 h-3" /> Download
+                  </button>
+                </div>
+                {isImage && (
+                  <div
+                    className="relative mt-1 rounded-lg overflow-hidden border border-gray-200 cursor-zoom-in group"
+                    onClick={() => setLightbox(true)}
+                  >
+                    <AuthImage
+                      docId={receipt.id}
+                      alt={receipt.fileName}
+                      className="w-full max-h-48 object-cover"
+                    />
+                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
+                      <ZoomIn className="w-6 h-6 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+                    </div>
+                  </div>
+                )}
+                {!isImage && (
+                  <p className="text-xs text-gray-400 ml-10 mt-1 truncate">{receipt.fileName}</p>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Lightbox */}
+      {lightbox && receipt && isImage && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 p-4"
+          onClick={() => setLightbox(false)}
+        >
+          <button
+            onClick={() => setLightbox(false)}
+            className="absolute top-4 right-4 text-white/70 hover:text-white"
+          >
+            <X className="w-6 h-6" />
+          </button>
+          <AuthImage
+            docId={receipt.id}
+            alt={receipt.fileName}
+            className="max-w-[90vw] max-h-[90vh] object-contain rounded-lg shadow-2xl"
+          />
+        </div>
+      )}
+    </div>
+  )
+}
+
 function TransactionRow({
   tx,
   onDelete,
+  receipt,
+  onClick,
 }: {
   tx: Transaction
   onDelete: (id: string) => void
+  receipt?: Document
+  onClick: () => void
 }) {
   const isIncome = tx.type === 'income'
+  const overdue  = isOverdue(tx)
 
   return (
-    <div className="flex items-center gap-4 px-4 py-3 hover:bg-gray-50 transition-colors group">
+    <div
+      className={cn(
+        'flex items-center gap-4 px-4 py-3 hover:bg-gray-50 transition-colors group cursor-pointer',
+        overdue && 'bg-red-50/40'
+      )}
+      onClick={onClick}
+    >
       {/* Type indicator */}
       <div className={cn(
         'w-8 h-8 rounded-lg flex items-center justify-center shrink-0',
@@ -77,14 +280,29 @@ function TransactionRow({
 
       {/* Description + category */}
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium text-gray-800 truncate">
-          {tx.description || ALL_CATEGORY_LABELS[tx.category]}
-        </p>
-        <p className="text-xs text-gray-400 truncate">
-          {ALL_CATEGORY_LABELS[tx.category]}
-          {tx.supplier ? ` · ${tx.supplier}` : ''}
-          {tx.property ? ` · ${tx.property}` : ''}
-        </p>
+        <div className="flex items-center gap-2">
+          <p className="text-sm font-medium text-gray-800 truncate">
+            {tx.description || ALL_CATEGORY_LABELS[tx.category]}
+          </p>
+          {overdue && (
+            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-semibold bg-red-100 text-red-600 shrink-0">
+              <Flag className="w-2.5 h-2.5" /> Overdue
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-2 mt-0.5">
+          <p className="text-xs text-gray-400 truncate">
+            {ALL_CATEGORY_LABELS[tx.category]}
+            {tx.supplier ? ` · ${tx.supplier}` : ''}
+            {tx.property ? ` · ${tx.property}` : ''}
+          </p>
+          {receipt && (
+            <span className="inline-flex items-center gap-1 text-xs text-sky-500 shrink-0">
+              <Paperclip className="w-3 h-3" />
+              Receipt
+            </span>
+          )}
+        </div>
       </div>
 
       {/* Date */}
@@ -105,7 +323,7 @@ function TransactionRow({
 
       {/* Delete */}
       <button
-        onClick={() => onDelete(tx.id)}
+        onClick={e => { e.stopPropagation(); onDelete(tx.id) }}
         className="opacity-0 group-hover:opacity-100 text-gray-300 hover:text-red-400 transition-all shrink-0"
       >
         <Trash2 className="w-3.5 h-3.5" />
@@ -118,23 +336,76 @@ export default function TransactionsPage() {
   const queryClient = useQueryClient()
   const currentYear = new Date().getFullYear()
 
-  const [showModal, setShowModal]   = useState(false)
-  const [typeFilter, setTypeFilter] = useState('')
-  const [search, setSearch]         = useState('')
-  const [year, setYear]             = useState(currentYear)
+  const [showModal, setShowModal]       = useState(false)
+  const [selectedTx, setSelectedTx]     = useState<Transaction | null>(null)
+  const [typeFilter, setTypeFilter]     = useState('')
+  const [search, setSearch]             = useState('')
+  type Preset = 'this_year' | 'last_year' | 'last_2' | 'last_3' | 'custom' | number
+  const [preset, setPreset]             = useState<Preset>('this_year')
+  const [customFrom, setCustomFrom]     = useState(currentYear)
+  const [customTo, setCustomTo]         = useState(currentYear)
+  const [dropdownOpen, setDropdownOpen] = useState(false)
+  const dropdownRef                     = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setDropdownOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [])
+
+  const yearFrom = preset === 'this_year' ? currentYear
+                 : preset === 'last_year' ? currentYear - 1
+                 : preset === 'last_2'    ? currentYear - 1
+                 : preset === 'last_3'    ? currentYear - 2
+                 : preset === 'custom'    ? customFrom
+                 : preset as number
+
+  const yearTo   = preset === 'this_year' ? currentYear
+                 : preset === 'last_year' ? currentYear - 1
+                 : preset === 'last_2'    ? currentYear
+                 : preset === 'last_3'    ? currentYear
+                 : preset === 'custom'    ? customTo
+                 : preset as number
+
+  const presetLabel = preset === 'this_year' ? 'This Year'
+                    : preset === 'last_year'  ? 'Last Year'
+                    : preset === 'last_2'     ? 'Last 2 Years'
+                    : preset === 'last_3'     ? 'Last 3 Years'
+                    : preset === 'custom'     ? (customFrom === customTo ? `${customFrom}` : `${customFrom}–${customTo}`)
+                    : `${preset}`
 
   const { data: transactions = [], isLoading } = useQuery({
-    queryKey: ['transactions', typeFilter, year],
+    queryKey: ['transactions', typeFilter, yearFrom, yearTo],
     queryFn:  () => getTransactions({
       type: typeFilter as TransactionType || undefined,
-      year,
+      yearFrom,
+      yearTo,
     }),
   })
 
   const { data: summaryData } = useQuery({
-    queryKey: ['transaction-summary', year],
-    queryFn:  () => getTransactionSummary(year),
+    queryKey: ['transaction-summary', yearFrom, yearTo],
+    queryFn:  () => getTransactionSummary({ yearFrom, yearTo }),
   })
+
+  const { data: allDocs = [] } = useQuery({
+    queryKey: ['documents'],
+    queryFn:  () => getAllDocuments(),
+  })
+
+  // Map transaction_id → receipt/invoice document
+  const receiptByTxId = new Map<string, Document>()
+  for (const doc of allDocs) {
+    if (doc.transactionId && (doc.documentType === 'receipt' || doc.documentType === 'invoice' || doc.documentType === 'other')) {
+      if (!receiptByTxId.has(doc.transactionId)) {
+        receiptByTxId.set(doc.transactionId, doc)
+      }
+    }
+  }
 
   const deleteMutation = useMutation({
     mutationFn: deleteTransaction,
@@ -159,18 +430,15 @@ export default function TransactionsPage() {
 
   const summary = summaryData?.summary
 
-  const yearOptions = Array.from({ length: 5 }, (_, i) => currentYear - i)
+  const yearOptions = Array.from({ length: 6 }, (_, i) => currentYear - i)
 
   function handleExport() {
-    const url = getExportUrl(year)
-    const token = localStorage.getItem('token')
-    // Fetch with auth then trigger download
-    fetch(url, { headers: { Authorization: `Bearer ${token}` } })
-      .then(r => r.blob())
-      .then(blob => {
+    const fileLabel = yearFrom === yearTo ? `${yearFrom}` : `${yearFrom}-${yearTo}`
+    api.get(getExportUrl(yearFrom, yearTo), { responseType: 'blob' })
+      .then(res => {
         const a = document.createElement('a')
-        a.href = URL.createObjectURL(blob)
-        a.download = `transactions-${year}.csv`
+        a.href = URL.createObjectURL(res.data)
+        a.download = `transactions-${fileLabel}.csv`
         a.click()
       })
       .catch(() => toast.error('Export failed'))
@@ -183,22 +451,114 @@ export default function TransactionsPage() {
         <div>
           <h1 className="text-xl font-bold text-gray-900">Transactions</h1>
           <p className="text-sm text-gray-500 mt-0.5">
-            {isLoading ? 'Loading…' : `${transactions.length} transaction${transactions.length !== 1 ? 's' : ''} in ${year}`}
+            {isLoading ? 'Loading…' : `${transactions.length} transaction${transactions.length !== 1 ? 's' : ''} · ${presetLabel}`}
           </p>
         </div>
         <div className="flex items-center gap-2">
-          {/* Year picker */}
-          <div className="relative">
-            <select
-              value={year}
-              onChange={e => setYear(Number(e.target.value))}
-              className="appearance-none pl-3 pr-8 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-300 bg-white"
+          {/* Period picker */}
+          <div className="relative" ref={dropdownRef}>
+            <button
+              onClick={() => setDropdownOpen(o => !o)}
+              className="flex items-center gap-2 pl-3 pr-2.5 py-2 text-sm border border-gray-200 rounded-lg bg-white hover:border-gray-300 transition-colors"
             >
-              {yearOptions.map(y => (
-                <option key={y} value={y}>{y}</option>
-              ))}
-            </select>
-            <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
+              <span className="font-medium text-gray-700">{presetLabel}</span>
+              <ChevronDown className={cn('w-3.5 h-3.5 text-gray-400 transition-transform', dropdownOpen && 'rotate-180')} />
+            </button>
+
+            {dropdownOpen && (
+              <div className="absolute right-0 top-full mt-1.5 w-52 bg-white border border-gray-200 rounded-xl shadow-lg z-20 py-1 overflow-hidden">
+                {/* Named presets */}
+                {([
+                  { key: 'this_year', label: 'This Year' },
+                  { key: 'last_year', label: 'Last Year' },
+                  { key: 'last_2',    label: 'Last 2 Years' },
+                  { key: 'last_3',    label: 'Last 3 Years' },
+                ] as const).map(p => (
+                  <button
+                    key={p.key}
+                    onClick={() => { setPreset(p.key); setDropdownOpen(false) }}
+                    className={cn(
+                      'w-full text-left px-3 py-2 text-sm transition-colors',
+                      preset === p.key
+                        ? 'bg-sky-50 text-sky-700 font-medium'
+                        : 'text-gray-700 hover:bg-gray-50'
+                    )}
+                  >
+                    {p.label}
+                  </button>
+                ))}
+
+                {/* Divider */}
+                <div className="my-1 border-t border-gray-100" />
+
+                {/* Individual years */}
+                {yearOptions.map(y => (
+                  <button
+                    key={y}
+                    onClick={() => { setPreset(y); setDropdownOpen(false) }}
+                    className={cn(
+                      'w-full text-left px-3 py-2 text-sm transition-colors',
+                      preset === y
+                        ? 'bg-sky-50 text-sky-700 font-medium'
+                        : 'text-gray-700 hover:bg-gray-50'
+                    )}
+                  >
+                    {y}
+                  </button>
+                ))}
+
+                {/* Divider */}
+                <div className="my-1 border-t border-gray-100" />
+
+                {/* Custom range */}
+                <button
+                  onClick={() => { setPreset('custom'); setCustomFrom(yearFrom); setCustomTo(yearTo) }}
+                  className={cn(
+                    'w-full text-left px-3 py-2 text-sm transition-colors',
+                    preset === 'custom'
+                      ? 'bg-sky-50 text-sky-700 font-medium'
+                      : 'text-gray-700 hover:bg-gray-50'
+                  )}
+                >
+                  Custom Range…
+                </button>
+
+                {/* Custom range inputs */}
+                {preset === 'custom' && (
+                  <div className="px-3 pb-3 pt-1 flex items-center gap-2">
+                    <div className="relative flex-1">
+                      <select
+                        value={customFrom}
+                        onChange={e => {
+                          const y = Number(e.target.value)
+                          setCustomFrom(y)
+                          if (y > customTo) setCustomTo(y)
+                        }}
+                        className="w-full appearance-none pl-2 pr-6 py-1.5 text-xs border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-sky-300"
+                      >
+                        {yearOptions.map(y => <option key={y} value={y}>{y}</option>)}
+                      </select>
+                      <ChevronDown className="absolute right-1.5 top-1/2 -translate-y-1/2 w-3 h-3 text-gray-400 pointer-events-none" />
+                    </div>
+                    <span className="text-xs text-gray-400 shrink-0">to</span>
+                    <div className="relative flex-1">
+                      <select
+                        value={customTo}
+                        onChange={e => {
+                          const y = Number(e.target.value)
+                          setCustomTo(y)
+                          if (y < customFrom) setCustomFrom(y)
+                        }}
+                        className="w-full appearance-none pl-2 pr-6 py-1.5 text-xs border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-sky-300"
+                      >
+                        {yearOptions.filter(y => y >= customFrom).map(y => <option key={y} value={y}>{y}</option>)}
+                      </select>
+                      <ChevronDown className="absolute right-1.5 top-1/2 -translate-y-1/2 w-3 h-3 text-gray-400 pointer-events-none" />
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           <button
@@ -224,14 +584,14 @@ export default function TransactionsPage() {
         <SummaryCard
           label="Total Income"
           amount={summary?.total_income ?? 0}
-          sub={`${year}`}
+          sub={presetLabel}
           icon={TrendingUp}
           colour="bg-emerald-50 text-emerald-600"
         />
         <SummaryCard
           label="Total Expenses"
           amount={summary?.total_expenses ?? 0}
-          sub={`${year}`}
+          sub={presetLabel}
           icon={TrendingDown}
           colour="bg-red-50 text-red-500"
         />
@@ -255,7 +615,7 @@ export default function TransactionsPage() {
       {summaryData?.byProperty && summaryData.byProperty.length > 0 && (
         <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
           <div className="px-4 py-3 border-b border-gray-100 bg-gray-50">
-            <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wide">P&L By Property — {year}</h2>
+            <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wide">P&L By Property — {presetLabel}</h2>
           </div>
           <div className="divide-y divide-gray-100">
             {summaryData.byProperty.map(p => (
@@ -339,13 +699,33 @@ export default function TransactionsPage() {
                 key={tx.id}
                 tx={tx}
                 onDelete={(id) => deleteMutation.mutate(id)}
+                receipt={receiptByTxId.get(tx.id)}
+                onClick={() => setSelectedTx(tx)}
               />
             ))}
           </div>
         </div>
       )}
 
-      {showModal && <AddTransactionModal onClose={() => setShowModal(false)} />}
+      {showModal && (
+        <AddTransactionModal
+          onClose={() => setShowModal(false)}
+          onAdded={(tx) => {
+            const txYear = new Date(tx.date).getFullYear()
+            if (txYear !== yearFrom || txYear !== yearTo) {
+              setPreset(txYear)
+            }
+          }}
+        />
+      )}
+
+      {selectedTx && (
+        <TransactionDetailModal
+          tx={selectedTx}
+          receipt={receiptByTxId.get(selectedTx.id)}
+          onClose={() => setSelectedTx(null)}
+        />
+      )}
     </div>
   )
 }

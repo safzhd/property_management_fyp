@@ -55,18 +55,18 @@ async function tenanciesRoutes(fastify, options) {
         JOIN properties p ON t.property_id = p.id
         JOIN users u ON t.tenant_id = u.id
         LEFT JOIN rooms r ON t.room_id = r.id
-        WHERE p.landlord_id = ?
+        WHERE 1=1
       `;
-      const params = [request.user.id];
+      const params = [];
 
-      if (propertyId) {
-        query += ' AND t.property_id = ?';
-        params.push(propertyId);
-      }
-
-      if (tenantId) {
+      if (request.user.role === 'tenant') {
         query += ' AND t.tenant_id = ?';
-        params.push(tenantId);
+        params.push(request.user.id);
+      } else {
+        query += ' AND p.landlord_id = ?';
+        params.push(request.user.id);
+        if (propertyId) { query += ' AND t.property_id = ?'; params.push(propertyId); }
+        if (tenantId)   { query += ' AND t.tenant_id = ?';   params.push(tenantId); }
       }
 
       if (lifecycleStatus) {

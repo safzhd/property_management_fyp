@@ -1,9 +1,10 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { X, TrendingUp, TrendingDown } from 'lucide-react'
+import { X, TrendingUp, TrendingDown, Paperclip } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { createTransaction } from '@/api/transactions'
 import { getProperties } from '@/api/properties'
+import { uploadDocument } from '@/api/documents'
 import { INCOME_CATEGORIES, EXPENSE_CATEGORIES } from '@/types/transaction'
 import type { TransactionType, CreateTransactionPayload } from '@/types/transaction'
 import { toast } from 'sonner'
@@ -11,6 +12,7 @@ import { toast } from 'sonner'
 interface Props {
   onClose: () => void
   defaultPropertyId?: string
+  onAdded?: (tx: { id: string; date: string }) => void
 }
 
 const PAYMENT_METHODS = [
@@ -31,10 +33,12 @@ const STATUS_OPTIONS = [
 
 const today = new Date().toISOString().split('T')[0]
 
-export default function AddTransactionModal({ onClose, defaultPropertyId }: Props) {
+export default function AddTransactionModal({ onClose, defaultPropertyId, onAdded }: Props) {
   const queryClient = useQueryClient()
+  const fileRef = useRef<HTMLInputElement>(null)
 
   const [type, setType] = useState<TransactionType>('income')
+  const [receiptFile, setReceiptFile] = useState<File | null>(null)
   const [form, setForm] = useState({
     propertyId:    defaultPropertyId ?? '',
     category:      '',
@@ -55,12 +59,54 @@ export default function AddTransactionModal({ onClose, defaultPropertyId }: Prop
 
   const categories = type === 'income' ? INCOME_CATEGORIES : EXPENSE_CATEGORIES
 
+  const DESCRIPTION_PLACEHOLDER: Record<string, string> = {
+    rent:                        'e.g. March rent payment',
+    deposit:                     'e.g. Security deposit received',
+    other_income:                'e.g. Parking fee, storage payment',
+    council_tax:                 'e.g. Council tax — April',
+    utility_gas:                 'e.g. Monthly gas bill',
+    utility_electricity:         'e.g. Monthly electricity bill',
+    utility_water:               'e.g. Water rates — Q1',
+    utility_internet:            'e.g. Broadband bill',
+    insurance:                   'e.g. Buildings & contents insurance',
+    repairs_maintenance:         'e.g. Boiler repair, plumber call-out',
+    letting_agent_fees:          'e.g. Monthly management fee',
+    mortgage_interest:           'e.g. Monthly mortgage payment',
+    ground_rent_service_charge:  'e.g. Annual ground rent',
+    professional_fees:           'e.g. Accountant, solicitor fees',
+    travel:                      'e.g. Travel to inspect property',
+    other_expense:               'e.g. Miscellaneous expense',
+  }
+
+  const descriptionPlaceholder = form.category
+    ? (DESCRIPTION_PLACEHOLDER[form.category] ?? 'Add a short description')
+    : type === 'income' ? 'e.g. March rent payment' : 'e.g. Boiler repair'
+
   const mutation = useMutation({
     mutationFn: (payload: CreateTransactionPayload) => createTransaction(payload),
-    onSuccess: () => {
+    onSuccess: async (tx) => {
+      // Upload receipt if attached
+      if (receiptFile) {
+        try {
+          await uploadDocument(
+            form.propertyId || undefined,
+            receiptFile,
+            type === 'income' ? 'receipt' : 'invoice',
+            `Receipt for transaction${form.reference ? ` ${form.reference}` : ''}`,
+            undefined,
+            undefined,
+            tx.id
+          )
+          queryClient.invalidateQueries({ queryKey: ['documents'] })
+        } catch {
+          toast.warning('Transaction saved but receipt upload failed')
+        }
+      }
       queryClient.invalidateQueries({ queryKey: ['transactions'] })
       queryClient.invalidateQueries({ queryKey: ['transaction-summary'] })
+      queryClient.invalidateQueries({ queryKey: ['documents'] })
       toast.success('Transaction added')
+      onAdded?.(tx)
       onClose()
     },
     onError: (err: unknown) => {
@@ -195,7 +241,7 @@ export default function AddTransactionModal({ onClose, defaultPropertyId }: Prop
               type="text"
               value={form.description}
               onChange={e => set('description', e.target.value)}
-              placeholder={type === 'income' ? 'e.g. March rent payment' : 'e.g. Annual gas safety check'}
+              placeholder={descriptionPlaceholder}
               className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-300"
             />
           </div>
@@ -252,6 +298,33 @@ export default function AddTransactionModal({ onClose, defaultPropertyId }: Prop
               onChange={e => set('reference', e.target.value)}
               placeholder="e.g. INV-0042"
               className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-300"
+            />
+          </div>
+
+          {/* Receipt / proof attachment (optional) */}
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">
+              Receipt / Proof (Optional)
+            </label>
+            <button
+              type="button"
+              onClick={() => fileRef.current?.click()}
+              className={cn(
+                'w-full flex items-center gap-2 px-3 py-2 text-sm border rounded-lg transition-colors text-left',
+                receiptFile
+                  ? 'border-sky-300 bg-sky-50 text-sky-700'
+                  : 'border-gray-200 text-gray-400 hover:border-gray-300'
+              )}
+            >
+              <Paperclip className="w-3.5 h-3.5 shrink-0" />
+              {receiptFile ? receiptFile.name : 'Attach image or PDF'}
+            </button>
+            <input
+              ref={fileRef}
+              type="file"
+              accept="image/*,.pdf"
+              className="hidden"
+              onChange={e => setReceiptFile(e.target.files?.[0] ?? null)}
             />
           </div>
         </div>

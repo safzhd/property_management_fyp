@@ -47,13 +47,14 @@ async function documentsRoutes(fastify, options) {
         properties: {
           propertyId: { type: 'string', format: 'uuid' },
           tenancyId: { type: 'string', format: 'uuid' },
+          transactionId: { type: 'string', format: 'uuid' },
           documentType: { type: 'string' }
         }
       }
     }
   }, async (request, reply) => {
     try {
-      const { propertyId, tenancyId, documentType } = request.query;
+      const { propertyId, tenancyId, transactionId, documentType } = request.query;
       const isLandlord = request.user.role === 'landlord';
       const isTenant = request.user.role === 'tenant';
 
@@ -72,8 +73,9 @@ async function documentsRoutes(fastify, options) {
         query += ` AND (p.landlord_id = ? OR d.uploaded_by = ?)`;
         params.push(request.user.id, request.user.id);
       } else if (isTenant) {
-        query += ` AND (t.tenant_id = ? OR d.uploaded_by = ?)`;
-        params.push(request.user.id, request.user.id);
+        // Only show documents explicitly linked to a tenancy where this user is the tenant
+        query += ` AND t.tenant_id = ? AND d.tenancy_id IS NOT NULL`;
+        params.push(request.user.id);
       }
 
       if (propertyId) {
@@ -84,6 +86,11 @@ async function documentsRoutes(fastify, options) {
       if (tenancyId) {
         query += ' AND d.tenancy_id = ?';
         params.push(tenancyId);
+      }
+
+      if (transactionId) {
+        query += ' AND d.transaction_id = ?';
+        params.push(transactionId);
       }
 
       if (documentType) {
@@ -380,7 +387,9 @@ async function documentsRoutes(fastify, options) {
       let fileName = null;
       let mimeType = null;
       let propertyId = null;
+      let tenancyId = null;
       let roomId = null;
+      let transactionId = null;
       let documentType = 'other';
       let description = null;
 
@@ -390,10 +399,12 @@ async function documentsRoutes(fastify, options) {
           fileName   = part.filename;
           mimeType   = part.mimetype;
         } else {
-          if (part.fieldname === 'propertyId')   propertyId   = part.value;
-          if (part.fieldname === 'roomId')        roomId       = part.value || null;
-          if (part.fieldname === 'documentType') documentType = part.value;
-          if (part.fieldname === 'description')  description  = part.value || null;
+          if (part.fieldname === 'propertyId')    propertyId    = part.value || null;
+          if (part.fieldname === 'tenancyId')     tenancyId     = part.value || null;
+          if (part.fieldname === 'roomId')         roomId        = part.value || null;
+          if (part.fieldname === 'transactionId') transactionId = part.value || null;
+          if (part.fieldname === 'documentType')  documentType  = part.value;
+          if (part.fieldname === 'description')   description   = part.value || null;
         }
       }
 
@@ -427,12 +438,14 @@ async function documentsRoutes(fastify, options) {
       const id = generateUUID();
       await pool.query(
         `INSERT INTO documents (
-          id, property_id, room_id, document_type, file_name, file_size,
+          id, property_id, tenancy_id, transaction_id, room_id, document_type, file_name, file_size,
           mime_type, storage_path, description, uploaded_by
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           id,
           propertyId || null,
+          tenancyId || null,
+          transactionId || null,
           roomId || null,
           documentType,
           fileName,
@@ -467,8 +480,9 @@ async function documentsRoutes(fastify, options) {
   }, async (request, reply) => {
     try {
       const [documents] = await pool.query(
-        `SELECT d.*, p.landlord_id FROM documents d
+        `SELECT d.*, p.landlord_id, t.tenant_id FROM documents d
          LEFT JOIN properties p ON d.property_id = p.id
+         LEFT JOIN tenancies t ON d.tenancy_id = t.id
          WHERE d.id = ?`,
         [request.params.id]
       );
@@ -479,6 +493,7 @@ async function documentsRoutes(fastify, options) {
       const hasAccess =
         request.user.role === 'admin' ||
         d.landlord_id === request.user.id ||
+        d.tenant_id === request.user.id ||
         d.uploaded_by === request.user.id;
       if (!hasAccess) return reply.code(403).send({ error: 'Forbidden' });
 
@@ -602,6 +617,7 @@ function formatDocument(d) {
     propertyId: d.property_id,
     propertyName: d.property_name,
     tenancyId: d.tenancy_id,
+    transactionId: d.transaction_id,
     roomId: d.room_id,
     complianceCertificateId: d.compliance_certificate_id,
     documentType: d.document_type,

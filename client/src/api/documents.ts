@@ -23,6 +23,7 @@ export interface Document {
   propertyId: string | null
   roomId: string | null
   tenancyId: string | null
+  transactionId: string | null
   documentType: DocumentType
   fileName: string
   fileSize: number
@@ -37,6 +38,7 @@ export interface Document {
 export async function getAllDocuments(params?: {
   propertyId?: string
   tenancyId?: string
+  transactionId?: string
   documentType?: DocumentType
 }): Promise<Document[]> {
   const { data } = await api.get<{ documents: Document[] }>('/documents', { params })
@@ -53,14 +55,18 @@ export async function uploadDocument(
   file: File,
   documentType: DocumentType,
   description?: string,
-  roomId?: string
+  roomId?: string,
+  tenancyId?: string,
+  transactionId?: string
 ): Promise<Document> {
   const form = new FormData()
   form.append('file', file)
-  if (propertyId) form.append('propertyId', propertyId)
+  if (propertyId)     form.append('propertyId',     propertyId)
+  if (tenancyId)      form.append('tenancyId',      tenancyId)
+  if (roomId)         form.append('roomId',          roomId)
+  if (transactionId)  form.append('transactionId',  transactionId)
   form.append('documentType', documentType)
   if (description) form.append('description', description)
-  if (roomId) form.append('roomId', roomId)
 
   const { data } = await api.post<{ document: Document }>('/documents/upload', form)
   return data.document

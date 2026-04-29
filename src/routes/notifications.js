@@ -314,6 +314,63 @@ async function notificationsRoutes(fastify, options) {
       const userId = request.user.id;
       const role   = request.user.role;
 
+      // Tenants get their own alerts; landlords/admin get portfolio-wide alerts
+      if (role === 'tenant') {
+        const [overdueRentTenant] = await pool.query(
+          `SELECT tx.id, tx.amount, tx.date, t.id AS tenancy_id,
+                  COALESCE(p.property_name, p.address_line_1) AS property_name,
+                  DATEDIFF(CURDATE(), tx.date) AS days_overdue
+           FROM transactions tx
+           JOIN tenancies t ON tx.tenancy_id = t.id
+           JOIN properties p ON tx.property_id = p.id
+           WHERE t.tenant_id = ?
+             AND tx.category = 'rent'
+             AND tx.date <= DATE_SUB(CURDATE(), INTERVAL 5 DAY)
+             AND tx.status NOT IN ('paid','reconciled','refunded')`,
+          [userId]
+        );
+
+        const [dueTomorrow] = await pool.query(
+          `SELECT tx.id, tx.amount, tx.date, t.id AS tenancy_id,
+                  COALESCE(p.property_name, p.address_line_1) AS property_name
+           FROM transactions tx
+           JOIN tenancies t ON tx.tenancy_id = t.id
+           JOIN properties p ON tx.property_id = p.id
+           WHERE t.tenant_id = ?
+             AND tx.category = 'rent'
+             AND tx.date = DATE_ADD(CURDATE(), INTERVAL 1 DAY)
+             AND tx.status NOT IN ('paid','reconciled','refunded')`,
+          [userId]
+        );
+
+        const tenantAlerts = [];
+        for (const tx of dueTomorrow) {
+          tenantAlerts.push({
+            id: `rent-due-${tx.id}`,
+            type: 'rent_due',
+            severity: 'normal',
+            title: 'Rent Due Tomorrow',
+            message: `£${Number(tx.amount).toFixed(0)} rent is due tomorrow at ${tx.property_name}.`,
+            tenancyId: tx.tenancy_id,
+            createdAt: tx.date,
+          });
+        }
+        for (const tx of overdueRentTenant) {
+          tenantAlerts.push({
+            id: `rent-overdue-${tx.id}`,
+            type: 'rent_overdue',
+            severity: tx.days_overdue >= 10 ? 'high' : 'warning',
+            title: 'Rent Payment Overdue',
+            message: `£${Number(tx.amount).toFixed(0)} rent at ${tx.property_name} is ${tx.days_overdue} day${tx.days_overdue !== 1 ? 's' : ''} overdue.`,
+            tenancyId: tx.tenancy_id,
+            createdAt: tx.date,
+          });
+        }
+        const order = { high: 0, warning: 1, normal: 2, low: 3 };
+        tenantAlerts.sort((a, b) => (order[a.severity] ?? 2) - (order[b.severity] ?? 2));
+        return reply.send({ alerts: tenantAlerts, count: tenantAlerts.length });
+      }
+
       const tenancyQuery = role === 'admin'
         ? `SELECT t.id, t.lifecycle_status, t.start_date, t.end_date,
                   t.tenant_info_sheet_provided, t.how_to_rent_guide_provided, t.deposit_protected_date,
@@ -405,6 +462,82 @@ async function notificationsRoutes(fastify, options) {
         }
       }
 
+      // Rent due tomorrow
+      const dueTomorrowQuery = role === 'admin'
+        ? `SELECT tx.id, tx.amount, tx.date, t.id AS tenancy_id,
+                  CONCAT(u.given_name, ' ', u.last_name) AS tenant_name,
+                  COALESCE(p.property_name, p.address_line_1) AS property_name
+           FROM transactions tx
+           JOIN tenancies t ON tx.tenancy_id = t.id
+           JOIN users u ON t.tenant_id = u.id
+           JOIN properties p ON tx.property_id = p.id
+           WHERE tx.category = 'rent'
+             AND tx.date = DATE_ADD(CURDATE(), INTERVAL 1 DAY)
+             AND tx.status NOT IN ('paid','reconciled','refunded')`
+        : `SELECT tx.id, tx.amount, tx.date, t.id AS tenancy_id,
+                  CONCAT(u.given_name, ' ', u.last_name) AS tenant_name,
+                  COALESCE(p.property_name, p.address_line_1) AS property_name
+           FROM transactions tx
+           JOIN tenancies t ON tx.tenancy_id = t.id
+           JOIN users u ON t.tenant_id = u.id
+           JOIN properties p ON tx.property_id = p.id
+           WHERE tx.category = 'rent'
+             AND tx.date = DATE_ADD(CURDATE(), INTERVAL 1 DAY)
+             AND tx.status NOT IN ('paid','reconciled','refunded')
+             AND p.landlord_id = ?`;
+
+      const [dueTomorrow] = await pool.query(dueTomorrowQuery, role === 'admin' ? [] : [userId]);
+      for (const tx of dueTomorrow) {
+        alerts.push({
+          id: `rent-due-${tx.id}`,
+          type: 'rent_due_tomorrow',
+          severity: 'normal',
+          title: 'Rent Due Tomorrow',
+          message: `£${Number(tx.amount).toFixed(0)} rent from ${tx.tenant_name} at ${tx.property_name} is due tomorrow.`,
+          tenancyId: tx.tenancy_id,
+          createdAt: new Date().toISOString(),
+        });
+      }
+
+      // Rent overdue 5+ days
+      const overdueQuery = role === 'admin'
+        ? `SELECT tx.id, tx.amount, tx.date, t.id AS tenancy_id,
+                  CONCAT(u.given_name, ' ', u.last_name) AS tenant_name,
+                  COALESCE(p.property_name, p.address_line_1) AS property_name,
+                  DATEDIFF(CURDATE(), tx.date) AS days_overdue
+           FROM transactions tx
+           JOIN tenancies t ON tx.tenancy_id = t.id
+           JOIN users u ON t.tenant_id = u.id
+           JOIN properties p ON tx.property_id = p.id
+           WHERE tx.category = 'rent'
+             AND tx.date <= DATE_SUB(CURDATE(), INTERVAL 5 DAY)
+             AND tx.status NOT IN ('paid','reconciled','refunded')`
+        : `SELECT tx.id, tx.amount, tx.date, t.id AS tenancy_id,
+                  CONCAT(u.given_name, ' ', u.last_name) AS tenant_name,
+                  COALESCE(p.property_name, p.address_line_1) AS property_name,
+                  DATEDIFF(CURDATE(), tx.date) AS days_overdue
+           FROM transactions tx
+           JOIN tenancies t ON tx.tenancy_id = t.id
+           JOIN users u ON t.tenant_id = u.id
+           JOIN properties p ON tx.property_id = p.id
+           WHERE tx.category = 'rent'
+             AND tx.date <= DATE_SUB(CURDATE(), INTERVAL 5 DAY)
+             AND tx.status NOT IN ('paid','reconciled','refunded')
+             AND p.landlord_id = ?`;
+
+      const [overdueRent] = await pool.query(overdueQuery, role === 'admin' ? [] : [userId]);
+      for (const tx of overdueRent) {
+        alerts.push({
+          id: `rent-overdue-${tx.id}`,
+          type: 'rent_overdue',
+          severity: tx.days_overdue >= 10 ? 'high' : 'warning',
+          title: 'Rent Payment Overdue',
+          message: `£${Number(tx.amount).toFixed(0)} rent from ${tx.tenant_name} at ${tx.property_name} is ${tx.days_overdue} day${tx.days_overdue !== 1 ? 's' : ''} overdue.`,
+          tenancyId: tx.tenancy_id,
+          createdAt: tx.date,
+        });
+      }
+
       // Sort high severity first
       const order = { high: 0, warning: 1, normal: 2, low: 3 };
       alerts.sort((a, b) => (order[a.severity] ?? 2) - (order[b.severity] ?? 2));
@@ -413,6 +546,132 @@ async function notificationsRoutes(fastify, options) {
     } catch (error) {
       fastify.log.error(error);
       return reply.code(500).send({ error: 'Failed to generate smart notifications' });
+    }
+  });
+
+  // Activity feed — recent portfolio events for landlord dashboard
+  fastify.get('/activity', {
+    onRequest: [fastify.authenticate],
+    schema: { description: 'Recent activity feed for landlord dashboard', tags: ['Notifications'], security: [{ bearerAuth: [] }] }
+  }, async (request, reply) => {
+    try {
+      const userId = request.user.id;
+
+      const DOC_LABELS = {
+        tenancy_agreement:  'Tenancy Agreement Added',
+        how_to_rent_guide:  'How to Rent Guide Added',
+        tenant_info_sheet:  'Tenant Info Sheet Added',
+        deposit_protection: 'Deposit Protection Added',
+        inventory:          'Inventory Added',
+        gas_certificate:    'Gas Safety Certificate Added',
+        eicr_certificate:   'EICR Certificate Added',
+        epc_certificate:    'EPC Certificate Added',
+        fire_risk_assessment: 'Fire Risk Assessment Added',
+        hmo_licence:        'HMO Licence Added',
+        id_document:        'ID Document Added',
+        reference:          'Reference Document Added',
+      };
+
+      // 1. Recent tenancies created
+      const [newTenancies] = await pool.query(`
+        SELECT t.id AS entity_id, t.created_at,
+               CONCAT(u.given_name, ' ', u.last_name) AS tenant_name,
+               u.given_name, u.last_name,
+               COALESCE(p.property_name, p.address_line_1) AS property_name,
+               r.room_name
+        FROM tenancies t
+        JOIN properties p ON t.property_id = p.id
+        JOIN users u ON t.tenant_id = u.id
+        LEFT JOIN rooms r ON t.room_id = r.id
+        WHERE p.landlord_id = ? AND t.created_at >= DATE_SUB(NOW(), INTERVAL 60 DAY)
+        ORDER BY t.created_at DESC LIMIT 15
+      `, [userId]);
+
+      // 2. Recent tenancy documents uploaded (exclude transaction docs and photos)
+      const [newDocs] = await pool.query(`
+        SELECT d.id AS entity_id, d.created_at, d.document_type,
+               CONCAT(tu.given_name, ' ', tu.last_name) AS tenant_name,
+               tu.given_name, tu.last_name,
+               COALESCE(p.property_name, p.address_line_1) AS property_name,
+               t.id AS tenancy_id
+        FROM documents d
+        LEFT JOIN properties p ON d.property_id = p.id
+        LEFT JOIN tenancies t ON d.tenancy_id = t.id
+        LEFT JOIN users tu ON t.tenant_id = tu.id
+        WHERE p.landlord_id = ?
+          AND d.document_type NOT IN ('photo','receipt','invoice','other')
+          AND d.tenancy_id IS NOT NULL
+          AND d.created_at >= DATE_SUB(NOW(), INTERVAL 60 DAY)
+        ORDER BY d.created_at DESC LIMIT 15
+      `, [userId]);
+
+      // 3. Rent payments received
+      const [payments] = await pool.query(`
+        SELECT tx.id AS entity_id, tx.created_at, tx.amount,
+               CONCAT(u.given_name, ' ', u.last_name) AS tenant_name,
+               u.given_name, u.last_name,
+               COALESCE(p.property_name, p.address_line_1) AS property_name,
+               t.id AS tenancy_id
+        FROM transactions tx
+        JOIN properties p ON tx.property_id = p.id
+        LEFT JOIN tenancies t ON tx.tenancy_id = t.id
+        LEFT JOIN users u ON t.tenant_id = u.id
+        WHERE p.landlord_id = ?
+          AND tx.category = 'rent'
+          AND tx.status IN ('paid','reconciled')
+          AND tx.created_at >= DATE_SUB(NOW(), INTERVAL 60 DAY)
+        ORDER BY tx.created_at DESC LIMIT 15
+      `, [userId]);
+
+      const events = [];
+
+      for (const row of newTenancies) {
+        events.push({
+          id:          `tenancy-${row.entity_id}`,
+          type:        'tenancy_created',
+          title:       'Tenancy Created',
+          description: `${row.tenant_name} · ${row.property_name}${row.room_name ? ` · ${row.room_name}` : ''}`,
+          tenantName:  row.tenant_name,
+          initials:    `${(row.given_name || '?')[0]}${(row.last_name || '?')[0]}`.toUpperCase(),
+          tenancyId:   row.entity_id,
+          createdAt:   row.created_at,
+        });
+      }
+
+      for (const row of newDocs) {
+        events.push({
+          id:          `doc-${row.entity_id}`,
+          type:        'document_uploaded',
+          title:       DOC_LABELS[row.document_type] ?? 'Document Added',
+          description: `${row.tenant_name} · ${row.property_name}`,
+          tenantName:  row.tenant_name,
+          initials:    `${(row.given_name || '?')[0]}${(row.last_name || '?')[0]}`.toUpperCase(),
+          tenancyId:   row.tenancy_id,
+          createdAt:   row.created_at,
+        });
+      }
+
+      for (const row of payments) {
+        events.push({
+          id:          `payment-${row.entity_id}`,
+          type:        'payment_received',
+          title:       'Rent Payment Received',
+          description: `£${Number(row.amount).toFixed(0)} · ${row.tenant_name} · ${row.property_name}`,
+          tenantName:  row.tenant_name,
+          initials:    `${(row.given_name || '?')[0]}${(row.last_name || '?')[0]}`.toUpperCase(),
+          tenancyId:   row.tenancy_id,
+          createdAt:   row.created_at,
+        });
+      }
+
+      // Sort all events newest first, take top 20
+      events.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      const trimmed = events.slice(0, 20);
+
+      return reply.send({ events: trimmed, count: trimmed.length });
+    } catch (error) {
+      fastify.log.error(error);
+      return reply.code(500).send({ error: 'Failed to fetch activity' });
     }
   });
 

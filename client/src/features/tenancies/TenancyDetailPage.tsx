@@ -4,12 +4,13 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   ChevronLeft, User, Home, MapPin, Calendar, PoundSterling,
   ShieldCheck, ChevronRight, CheckCircle2, Circle, AlertCircle, X, Check,
-  Mail, FileSignature, Upload, Copy,
+  Mail, FileSignature, Upload, Copy, AlertTriangle,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { getTenancy, transitionTenancy, updateTenancyCompliance } from '@/api/tenancies'
 import { uploadDocument, getPropertyDocuments } from '@/api/documents'
+import { getSmartAlerts } from '@/api/notifications'
 import type { Tenancy, LifecycleStatus } from '@/types/tenancy'
 
 // ── Email template ────────────────────────────────────────────────────────────
@@ -885,6 +886,15 @@ export default function TenancyDetailPage() {
     enabled: Boolean(tenancy?.propertyId),
   })
 
+  const { data: alertsData } = useQuery({
+    queryKey: ['smart-alerts'],
+    queryFn: () => getSmartAlerts(),
+  })
+
+  const rentOverdueAlert = (alertsData?.alerts ?? []).find(
+    a => a.type === 'rent_overdue' && a.tenancyId === id
+  )
+
   const signedContract = tenancyDocs.find(
     d => d.documentType === 'tenancy_agreement' && d.tenancyId === id
   )
@@ -1018,6 +1028,20 @@ export default function TenancyDetailPage() {
           <span>{tenancy.property.postcode}</span>
         </div>
       </div>
+
+      {/* Rent overdue warning banner */}
+      {rentOverdueAlert && (
+        <div className="flex items-start gap-3 bg-red-50 border border-red-200 rounded-xl px-4 py-3.5">
+          <AlertTriangle className="w-4 h-4 text-red-500 mt-0.5 shrink-0" />
+          <div>
+            <p className="text-sm font-semibold text-red-700">{rentOverdueAlert.title}</p>
+            <p className="text-xs text-red-500 mt-0.5">{rentOverdueAlert.message}</p>
+          </div>
+          <span className="ml-auto text-xs font-semibold bg-red-100 text-red-600 px-2 py-0.5 rounded-full shrink-0">
+            {rentOverdueAlert.severity === 'high' ? 'High Priority' : 'Warning'}
+          </span>
+        </div>
+      )}
 
       {/* Lifecycle — overflow-visible so the hover tooltip isn't clipped */}
       <div className="bg-white rounded-xl border border-gray-200 overflow-visible">

@@ -1,10 +1,11 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Plus, FileText, MapPin, User, Home, ChevronRight, Search, Trash2 } from 'lucide-react'
+import { Plus, FileText, MapPin, User, Home, ChevronRight, Search, Trash2, AlertTriangle } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { getTenancies, deleteTenancy } from '@/api/tenancies'
+import { getSmartAlerts } from '@/api/notifications'
 import type { Tenancy, LifecycleStatus } from '@/types/tenancy'
 
 const STATUS_LABELS: Record<LifecycleStatus, string> = {
@@ -47,7 +48,7 @@ function formatCurrency(amount: number) {
   return new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP', minimumFractionDigits: 0 }).format(amount)
 }
 
-function TenancyCard({ tenancy, onDelete }: { tenancy: Tenancy; onDelete: (id: string) => void }) {
+function TenancyCard({ tenancy, onDelete, rentOverdue }: { tenancy: Tenancy; onDelete: (id: string) => void; rentOverdue?: boolean }) {
   const navigate = useNavigate()
   const [armed, setArmed] = useState(false)
   const propertyDisplay = tenancy.property.name || tenancy.property.address
@@ -80,8 +81,14 @@ function TenancyCard({ tenancy, onDelete }: { tenancy: Tenancy; onDelete: (id: s
           </div>
         </div>
 
-        {/* Right — status badge */}
+        {/* Right — badges */}
         <div className="flex items-center gap-2 shrink-0">
+          {rentOverdue && (
+            <span className="flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full bg-red-100 text-red-600">
+              <AlertTriangle className="w-3 h-3" />
+              Rent Overdue
+            </span>
+          )}
           <span className={cn('text-xs font-medium px-2 py-0.5 rounded-full', STATUS_STYLES[tenancy.lifecycleStatus])}>
             {STATUS_LABELS[tenancy.lifecycleStatus]}
           </span>
@@ -147,6 +154,17 @@ export default function TenanciesPage() {
     queryKey: ['tenancies', statusFilter],
     queryFn: () => getTenancies(statusFilter ? { lifecycleStatus: statusFilter } : undefined),
   })
+
+  const { data: alertsData } = useQuery({
+    queryKey: ['smart-alerts'],
+    queryFn: () => getSmartAlerts(),
+  })
+
+  const overdueIds = new Set(
+    (alertsData?.alerts ?? [])
+      .filter(a => a.type === 'rent_overdue')
+      .map(a => a.tenancyId)
+  )
 
   const deleteMutation = useMutation({
     mutationFn: deleteTenancy,
@@ -245,7 +263,7 @@ export default function TenanciesPage() {
       ) : (
         <div className="space-y-3">
           {filtered.map(t => (
-            <TenancyCard key={t.id} tenancy={t} onDelete={(id) => deleteMutation.mutate(id)} />
+            <TenancyCard key={t.id} tenancy={t} onDelete={(id) => deleteMutation.mutate(id)} rentOverdue={overdueIds.has(t.id)} />
           ))}
         </div>
       )}

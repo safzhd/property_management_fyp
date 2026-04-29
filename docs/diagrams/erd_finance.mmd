@@ -1,0 +1,114 @@
+erDiagram
+    users {
+        char id PK
+        varchar given_name
+        varchar last_name
+        enum role
+    }
+
+    properties {
+        char id PK
+        char landlord_id FK
+        varchar property_name
+        varchar address_line_1
+        varchar postcode
+    }
+
+    rooms {
+        char id PK
+        char property_id FK
+        varchar room_name
+    }
+
+    tenancies {
+        char id PK
+        char tenant_id FK
+        char property_id FK
+        char room_id FK
+        decimal rent_amount
+        enum rent_frequency
+        int rent_due_day
+        decimal deposit_amount
+        enum deposit_scheme
+        varchar deposit_reference
+        date deposit_protected_date
+        enum lifecycle_status
+    }
+
+    payments {
+        char id PK
+        char tenancy_id FK
+        char paid_by_user_id FK
+        decimal amount
+        enum payment_type
+        date due_date
+        date payment_date
+        enum payment_method
+        enum payment_status
+        varchar reference
+        varchar transaction_id
+        text notes
+        datetime created_at
+        datetime updated_at
+    }
+
+    transactions {
+        char id PK
+        char property_id FK
+        char tenancy_id FK
+        char room_id FK
+        char paid_by_user_id FK
+        enum type
+        enum category
+        decimal amount
+        date date
+        varchar description
+        varchar supplier
+        varchar reference
+        enum payment_method
+        enum status
+        text notes
+        datetime created_at
+        datetime updated_at
+    }
+
+    documents {
+        char id PK
+        char property_id FK
+        char tenancy_id FK
+        char compliance_certificate_id FK
+        char maintenance_request_id FK
+        char uploaded_by FK
+        varchar file_name
+        enum document_type
+        int file_size
+        varchar mime_type
+        datetime created_at
+    }
+
+    audit_log {
+        char id PK
+        char user_id FK
+        varchar action
+        varchar entity_type
+        char entity_id
+        json old_values
+        json new_values
+        varchar ip_address
+        text user_agent
+        datetime created_at
+    }
+
+    users ||--o{ properties : "owns"
+    users ||--o{ payments : "paid by"
+    users ||--o{ transactions : "paid by"
+    users ||--o{ audit_log : "actions tracked"
+    properties ||--o{ rooms : "has"
+    properties ||--o{ tenancies : "has"
+    properties ||--o{ transactions : "income and expenses"
+    rooms ||--o{ tenancies : "assigned to"
+    rooms ||--o{ transactions : "linked to"
+    tenancies ||--o{ payments : "generates"
+    tenancies ||--o{ transactions : "generates"
+    transactions ||--o| documents : "evidenced by"
+    payments ||--o| documents : "evidenced by"

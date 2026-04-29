@@ -1,10 +1,9 @@
+import { api } from '@/lib/axios'
 import type {
   Transaction, CreateTransactionPayload,
   TransactionSummary, PropertyPnL,
   TransactionType, TransactionCategory, TransactionStatus
 } from '@/types/transaction'
-
-const BASE = '/api/transactions'
 
 export async function getTransactions(params?: {
   propertyId?: string
@@ -13,71 +12,39 @@ export async function getTransactions(params?: {
   category?:   TransactionCategory
   status?:     TransactionStatus
   year?:       number
+  yearFrom?:   number
+  yearTo?:     number
 }): Promise<Transaction[]> {
-  const qs = params ? '?' + new URLSearchParams(
-    Object.entries(params).filter(([, v]) => v !== undefined).map(([k, v]) => [k, String(v)])
-  ).toString() : ''
-  const res = await fetch(`${BASE}${qs}`, {
-    headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
-  })
-  if (!res.ok) throw new Error('Failed to fetch transactions')
-  const data = await res.json()
+  const { data } = await api.get<{ transactions: Transaction[] }>('/transactions', { params })
   return data.transactions
 }
 
-export async function getTransactionSummary(year?: number): Promise<{
-  year: number
-  summary: TransactionSummary
+export async function getTransactionSummary(params: { yearFrom: number; yearTo: number }): Promise<{
+  yearFrom: number
+  yearTo:   number
+  summary:  TransactionSummary
   byProperty: PropertyPnL[]
   upcoming: Transaction[]
 }> {
-  const qs = year ? `?year=${year}` : ''
-  const res = await fetch(`${BASE}/summary${qs}`, {
-    headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
-  })
-  if (!res.ok) throw new Error('Failed to fetch summary')
-  return res.json()
+  const { data } = await api.get('/transactions/summary', { params })
+  return data
 }
 
 export async function createTransaction(payload: CreateTransactionPayload): Promise<Transaction> {
-  const res = await fetch(BASE, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${localStorage.getItem('token')}`,
-    },
-    body: JSON.stringify(payload),
-  })
-  if (!res.ok) {
-    const err = await res.json()
-    throw new Error(err.error || 'Failed to create transaction')
-  }
-  const data = await res.json()
+  const { data } = await api.post<{ transaction: Transaction }>('/transactions', payload)
   return data.transaction
 }
 
 export async function updateTransaction(id: string, payload: Partial<CreateTransactionPayload>): Promise<void> {
-  const res = await fetch(`${BASE}/${id}`, {
-    method: 'PATCH',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${localStorage.getItem('token')}`,
-    },
-    body: JSON.stringify(payload),
-  })
-  if (!res.ok) throw new Error('Failed to update transaction')
+  await api.patch(`/transactions/${id}`, payload)
 }
 
 export async function deleteTransaction(id: string): Promise<void> {
-  const res = await fetch(`${BASE}/${id}`, {
-    method: 'DELETE',
-    headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
-  })
-  if (!res.ok) throw new Error('Failed to delete transaction')
+  await api.delete(`/transactions/${id}`)
 }
 
-export function getExportUrl(year: number, propertyId?: string) {
-  const qs = new URLSearchParams({ year: String(year) })
+export function getExportUrl(yearFrom: number, yearTo: number, propertyId?: string) {
+  const qs = new URLSearchParams({ yearFrom: String(yearFrom), yearTo: String(yearTo) })
   if (propertyId) qs.set('propertyId', propertyId)
-  return `${BASE}/export?${qs.toString()}`
+  return `/api/transactions/export?${qs.toString()}`
 }

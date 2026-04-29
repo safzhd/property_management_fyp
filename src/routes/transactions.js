@@ -34,7 +34,9 @@ async function transactionsRoutes(fastify, options) {
     schema: { description: 'Get all transactions', tags: ['Transactions'], security: [{ bearerAuth: [] }] }
   }, async (request, reply) => {
     try {
-      const { propertyId, tenancyId, type, category, status, year } = request.query;
+      const { propertyId, tenancyId, type, category, status, year, yearFrom, yearTo } = request.query;
+
+      const isTenant = request.user.role === 'tenant';
 
       let query = `
         SELECT tx.*,
@@ -46,16 +48,28 @@ async function transactionsRoutes(fastify, options) {
         LEFT JOIN rooms r ON tx.room_id = r.id
         LEFT JOIN tenancies t ON tx.tenancy_id = t.id
         LEFT JOIN users u ON t.tenant_id = u.id
-        WHERE p.landlord_id = ?
       `;
-      const params = [request.user.id];
+      const params = [];
 
-      if (propertyId) { query += ' AND tx.property_id = ?'; params.push(propertyId); }
-      if (tenancyId)  { query += ' AND tx.tenancy_id = ?';  params.push(tenancyId); }
-      if (type)       { query += ' AND tx.type = ?';        params.push(type); }
-      if (category)   { query += ' AND tx.category = ?';    params.push(category); }
-      if (status)     { query += ' AND tx.status = ?';      params.push(status); }
-      if (year)       { query += ' AND YEAR(tx.date) = ?';  params.push(year); }
+      if (isTenant) {
+        // Tenants can only see rent transactions for their own tenancies
+        query += ' WHERE t.tenant_id = ? AND tx.category = \'rent\'';
+        params.push(request.user.id);
+        if (tenancyId) { query += ' AND tx.tenancy_id = ?'; params.push(tenancyId); }
+      } else {
+        query += ' WHERE p.landlord_id = ?';
+        params.push(request.user.id);
+        if (propertyId) { query += ' AND tx.property_id = ?'; params.push(propertyId); }
+        if (tenancyId)  { query += ' AND tx.tenancy_id = ?';  params.push(tenancyId); }
+        if (type)       { query += ' AND tx.type = ?';        params.push(type); }
+        if (category)   { query += ' AND tx.category = ?';    params.push(category); }
+        if (status)     { query += ' AND tx.status = ?';      params.push(status); }
+        if (yearFrom && yearTo) {
+          query += ' AND YEAR(tx.date) BETWEEN ? AND ?'; params.push(yearFrom, yearTo);
+        } else if (year) {
+          query += ' AND YEAR(tx.date) = ?'; params.push(year);
+        }
+      }
 
       query += ' ORDER BY tx.date DESC';
 
@@ -73,7 +87,9 @@ async function transactionsRoutes(fastify, options) {
     schema: { description: 'Income vs expense summary + P&L per property', tags: ['Transactions'], security: [{ bearerAuth: [] }] }
   }, async (request, reply) => {
     try {
-      const { year = new Date().getFullYear() } = request.query;
+      const { year, yearFrom: qYearFrom, yearTo: qYearTo } = request.query;
+      const yFrom = qYearFrom ? Number(qYearFrom) : (year ? Number(year) : new Date().getFullYear());
+      const yTo   = qYearTo   ? Number(qYearTo)   : yFrom;
 
       // Overall P&L
       const [totals] = await pool.query(`
@@ -85,23 +101,24 @@ async function transactionsRoutes(fastify, options) {
           SUM(CASE WHEN tx.status IN ('pending','late') THEN tx.amount ELSE 0 END) AS outstanding
         FROM transactions tx
         JOIN properties p ON tx.property_id = p.id
-        WHERE p.landlord_id = ? AND YEAR(tx.date) = ?
-      `, [request.user.id, year]);
+        WHERE p.landlord_id = ? AND YEAR(tx.date) BETWEEN ? AND ?
+      `, [request.user.id, yFrom, yTo]);
 
-      // Per-property breakdown
+      // Per-property breakdown — LEFT JOIN so all properties appear even with no transactions
       const [byProperty] = await pool.query(`
         SELECT
           p.id AS property_id,
           COALESCE(p.property_name, p.address_line_1) AS property_name,
-          SUM(CASE WHEN tx.type = 'income'  AND tx.status = 'paid' THEN tx.amount ELSE 0 END) AS income,
-          SUM(CASE WHEN tx.type = 'expense' AND tx.status = 'paid' THEN tx.amount ELSE 0 END) AS expenses,
-          SUM(CASE WHEN tx.type = 'income'  AND tx.status = 'paid' THEN tx.amount
-                   WHEN tx.type = 'expense' AND tx.status = 'paid' THEN -tx.amount ELSE 0 END) AS net_profit
-        FROM transactions tx
-        JOIN properties p ON tx.property_id = p.id
-        WHERE p.landlord_id = ? AND YEAR(tx.date) = ?
+          COALESCE(SUM(CASE WHEN tx.type = 'income'  AND tx.status = 'paid' THEN tx.amount ELSE 0 END), 0) AS income,
+          COALESCE(SUM(CASE WHEN tx.type = 'expense' AND tx.status = 'paid' THEN tx.amount ELSE 0 END), 0) AS expenses,
+          COALESCE(SUM(CASE WHEN tx.type = 'income'  AND tx.status = 'paid' THEN tx.amount
+                            WHEN tx.type = 'expense' AND tx.status = 'paid' THEN -tx.amount ELSE 0 END), 0) AS net_profit
+        FROM properties p
+        LEFT JOIN transactions tx ON tx.property_id = p.id AND YEAR(tx.date) BETWEEN ? AND ?
+        WHERE p.landlord_id = ? AND p.status != 'archived'
         GROUP BY p.id, p.property_name, p.address_line_1
-      `, [request.user.id, year]);
+        ORDER BY property_name ASC
+      `, [yFrom, yTo, request.user.id]);
 
       // Upcoming / overdue income
       const [upcoming] = await pool.query(`
@@ -120,8 +137,9 @@ async function transactionsRoutes(fastify, options) {
       `, [request.user.id]);
 
       return reply.send({
-        year: Number(year),
-        summary: totals[0],
+        yearFrom: yFrom,
+        yearTo:   yTo,
+        summary:  totals[0],
         byProperty,
         upcoming: upcoming.map(formatTransaction),
       });
@@ -138,7 +156,10 @@ async function transactionsRoutes(fastify, options) {
     schema: { description: 'Export transactions as CSV', tags: ['Transactions'], security: [{ bearerAuth: [] }] }
   }, async (request, reply) => {
     try {
-      const { year = new Date().getFullYear(), propertyId } = request.query;
+      const { year, yearFrom: qYF, yearTo: qYT, propertyId } = request.query;
+      const yFrom = qYF ? Number(qYF) : (year ? Number(year) : new Date().getFullYear());
+      const yTo   = qYT ? Number(qYT) : yFrom;
+      const fileLabel = yFrom === yTo ? `${yFrom}` : `${yFrom}-${yTo}`;
 
       let query = `
         SELECT tx.date, tx.type, tx.category, tx.description, tx.supplier,
@@ -148,9 +169,9 @@ async function transactionsRoutes(fastify, options) {
         FROM transactions tx
         JOIN properties p ON tx.property_id = p.id
         LEFT JOIN rooms r ON tx.room_id = r.id
-        WHERE p.landlord_id = ? AND YEAR(tx.date) = ?
+        WHERE p.landlord_id = ? AND YEAR(tx.date) BETWEEN ? AND ?
       `;
-      const params = [request.user.id, year];
+      const params = [request.user.id, yFrom, yTo];
 
       if (propertyId) { query += ' AND tx.property_id = ?'; params.push(propertyId); }
       query += ' ORDER BY tx.date ASC';
@@ -169,7 +190,7 @@ async function transactionsRoutes(fastify, options) {
       ).join('\n');
 
       reply.header('Content-Type', 'text/csv');
-      reply.header('Content-Disposition', `attachment; filename="transactions-${year}.csv"`);
+      reply.header('Content-Disposition', `attachment; filename="transactions-${fileLabel}.csv"`);
       return reply.send(header + csv);
     } catch (error) {
       fastify.log.error(error);
