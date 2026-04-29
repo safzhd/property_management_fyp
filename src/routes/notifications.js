@@ -462,6 +462,47 @@ async function notificationsRoutes(fastify, options) {
         }
       }
 
+      // Rent paid late (paid 5+ days after due date, within last 60 days)
+      const paidLateQuery = role === 'admin'
+        ? `SELECT tx.id, tx.amount, tx.date, tx.created_at, t.id AS tenancy_id,
+                  CONCAT(u.given_name, ' ', u.last_name) AS tenant_name,
+                  COALESCE(p.property_name, p.address_line_1) AS property_name,
+                  DATEDIFF(tx.created_at, tx.date) AS days_late
+           FROM transactions tx
+           JOIN tenancies t ON tx.tenancy_id = t.id
+           JOIN users u ON t.tenant_id = u.id
+           JOIN properties p ON tx.property_id = p.id
+           WHERE tx.category = 'rent'
+             AND tx.status IN ('paid','reconciled')
+             AND DATEDIFF(tx.created_at, tx.date) > 5
+             AND tx.created_at >= DATE_SUB(NOW(), INTERVAL 60 DAY)`
+        : `SELECT tx.id, tx.amount, tx.date, tx.created_at, t.id AS tenancy_id,
+                  CONCAT(u.given_name, ' ', u.last_name) AS tenant_name,
+                  COALESCE(p.property_name, p.address_line_1) AS property_name,
+                  DATEDIFF(tx.created_at, tx.date) AS days_late
+           FROM transactions tx
+           JOIN tenancies t ON tx.tenancy_id = t.id
+           JOIN users u ON t.tenant_id = u.id
+           JOIN properties p ON tx.property_id = p.id
+           WHERE tx.category = 'rent'
+             AND tx.status IN ('paid','reconciled')
+             AND DATEDIFF(tx.created_at, tx.date) > 5
+             AND tx.created_at >= DATE_SUB(NOW(), INTERVAL 60 DAY)
+             AND p.landlord_id = ?`;
+
+      const [paidLate] = await pool.query(paidLateQuery, role === 'admin' ? [] : [userId]);
+      for (const tx of paidLate) {
+        alerts.push({
+          id: `paid-late-${tx.id}`,
+          type: 'rent_paid_late',
+          severity: 'warning',
+          title: 'Rent Paid Late',
+          message: `£${Number(tx.amount).toFixed(0)} from ${tx.tenant_name} at ${tx.property_name} was paid ${tx.days_late} day${tx.days_late !== 1 ? 's' : ''} late.`,
+          tenancyId: tx.tenancy_id,
+          createdAt: tx.created_at,
+        });
+      }
+
       // Rent due tomorrow
       const dueTomorrowQuery = role === 'admin'
         ? `SELECT tx.id, tx.amount, tx.date, t.id AS tenancy_id,

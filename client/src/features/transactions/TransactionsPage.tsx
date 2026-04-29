@@ -67,6 +67,11 @@ function isOverdue(tx: Transaction): boolean {
   return daysPast > 10
 }
 
+function isPaidLate(tx: Transaction): boolean {
+  if (tx.status !== 'paid' && tx.status !== 'reconciled') return false
+  return (new Date(tx.createdAt).getTime() - new Date(tx.date).getTime()) / 86400000 > 5
+}
+
 const PAYMENT_METHOD_LABELS: Record<string, string> = {
   bank_transfer:  'Bank Transfer',
   standing_order: 'Standing Order',
@@ -137,8 +142,10 @@ function TransactionDetailModal({
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <span className={cn('text-xs font-medium px-2 py-0.5 rounded-full', STATUS_STYLES[tx.status])}>
-              {tx.status.charAt(0).toUpperCase() + tx.status.slice(1)}
+            <span className={cn('text-xs font-medium px-2 py-0.5 rounded-full',
+              isPaidLate(tx) ? 'bg-yellow-100 text-yellow-700 border border-yellow-200' : STATUS_STYLES[tx.status]
+            )}>
+              {isPaidLate(tx) ? 'Paid Late' : tx.status.charAt(0).toUpperCase() + tx.status.slice(1)}
             </span>
             {overdue && (
               <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-semibold bg-red-100 text-red-600">
@@ -309,8 +316,10 @@ function TransactionRow({
       <p className="text-xs text-gray-400 shrink-0 hidden sm:block">{formatDate(tx.date)}</p>
 
       {/* Status */}
-      <span className={cn('text-xs font-medium px-2 py-0.5 rounded-full shrink-0 hidden sm:inline-flex', STATUS_STYLES[tx.status])}>
-        {tx.status.charAt(0).toUpperCase() + tx.status.slice(1)}
+      <span className={cn('text-xs font-medium px-2 py-0.5 rounded-full shrink-0 hidden sm:inline-flex',
+        isPaidLate(tx) ? 'bg-yellow-100 text-yellow-700 border border-yellow-200' : STATUS_STYLES[tx.status]
+      )}>
+        {isPaidLate(tx) ? 'Paid Late' : tx.status.charAt(0).toUpperCase() + tx.status.slice(1)}
       </span>
 
       {/* Amount */}

@@ -244,6 +244,11 @@ const TX_STATUS_CHIP: Record<string, { label: string; cls: string }> = {
   refunded:   { label: 'Refunded',   cls: 'bg-purple-100 text-purple-700' },
 }
 
+function isPaidLate(tx: Transaction): boolean {
+  if (tx.status !== 'paid' && tx.status !== 'reconciled') return false
+  return (new Date(tx.createdAt).getTime() - new Date(tx.date).getTime()) / 86400000 > 5
+}
+
 function PaymentHistory({ transactions }: { transactions: Transaction[] }) {
   const [expanded, setExpanded] = useState(false)
   const sorted = [...transactions].sort(
@@ -268,7 +273,9 @@ function PaymentHistory({ transactions }: { transactions: Transaction[] }) {
         <>
           <div className="divide-y divide-gray-100">
             {shown.map(tx => {
-              const chip = TX_STATUS_CHIP[tx.status] ?? { label: tx.status, cls: 'bg-gray-100 text-gray-600' }
+              const chip = isPaidLate(tx)
+                ? { label: 'Paid Late', cls: 'bg-yellow-100 text-yellow-700' }
+                : TX_STATUS_CHIP[tx.status] ?? { label: tx.status, cls: 'bg-gray-100 text-gray-600' }
               return (
                 <div key={tx.id} className="flex items-center justify-between px-5 py-3.5">
                   <div className="flex items-center gap-3">
