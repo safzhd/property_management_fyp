@@ -123,6 +123,118 @@ function getRentStatus(transactions: Transaction[], rentDueDay: number, frequenc
   return { status: 'upcoming', currentTx: null, nextDue }
 }
 
+// ── Pay Now modal ─────────────────────────────────────────────────────────────
+
+function PayNowModal({
+  rentAmount,
+  dueDate,
+  onUpload,
+  uploading,
+  onClose,
+}: {
+  rentAmount: number
+  dueDate: Date
+  onUpload: (file: File) => void
+  uploading: boolean
+  onClose: () => void
+}) {
+  const [step, setStep] = useState<'instructions' | 'upload'>('instructions')
+  const fileRef = useRef<HTMLInputElement>(null)
+
+  function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (file) onUpload(file)
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 p-4"
+      onClick={e => { if (e.target === e.currentTarget) onClose() }}
+    >
+      <div className="bg-white w-full max-w-sm rounded-2xl shadow-2xl overflow-hidden">
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+          <p className="text-sm font-bold text-gray-900">
+            {step === 'instructions' ? 'Pay Rent' : 'Upload Proof of Payment'}
+          </p>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors">
+            <ChevronDown className="w-5 h-5" />
+          </button>
+        </div>
+
+        {step === 'instructions' ? (
+          <div className="px-5 py-5 space-y-5">
+            {/* Amount */}
+            <div className="bg-gray-50 rounded-xl p-4 flex items-center justify-between">
+              <div>
+                <p className="text-xs text-gray-400">Amount due</p>
+                <p className="text-2xl font-bold text-gray-900 mt-0.5">{formatCurrency(rentAmount)}</p>
+              </div>
+              <div className="text-right">
+                <p className="text-xs text-gray-400">Due date</p>
+                <p className="text-sm font-semibold text-gray-700 mt-0.5">{formatShortDate(dueDate)}</p>
+              </div>
+            </div>
+
+            {/* Bank transfer details */}
+            <div>
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Bank Transfer Details</p>
+              <div className="space-y-2 text-sm">
+                <div className="flex justify-between py-2 border-b border-gray-100">
+                  <span className="text-gray-500">Account name</span>
+                  <span className="font-medium text-gray-800">Contact your landlord</span>
+                </div>
+                <div className="flex justify-between py-2 border-b border-gray-100">
+                  <span className="text-gray-500">Reference</span>
+                  <span className="font-medium text-gray-800">Your full name</span>
+                </div>
+              </div>
+              <p className="text-xs text-gray-400 mt-3">
+                Your landlord will provide sort code and account number directly. Use your full name as the payment reference.
+              </p>
+            </div>
+
+            <button
+              onClick={() => setStep('upload')}
+              className="w-full py-3 rounded-xl bg-gray-900 text-white text-sm font-semibold hover:bg-gray-800 transition-colors"
+            >
+              Mark as Paid
+            </button>
+          </div>
+        ) : (
+          <div className="px-5 py-5 space-y-4">
+            <p className="text-sm text-gray-500">
+              Upload your bank transfer receipt or screenshot so your landlord can confirm receipt.
+            </p>
+
+            <button
+              onClick={() => fileRef.current?.click()}
+              disabled={uploading}
+              className="w-full flex flex-col items-center gap-2 py-8 rounded-xl border-2 border-dashed border-gray-200 hover:border-sky-300 hover:bg-sky-50/40 transition-colors disabled:opacity-50"
+            >
+              <Upload className="w-6 h-6 text-gray-400" />
+              <span className="text-sm font-medium text-gray-600">
+                {uploading ? 'Uploading…' : 'Tap to upload receipt'}
+              </span>
+              <span className="text-xs text-gray-400">PDF, image or screenshot</span>
+            </button>
+            <input ref={fileRef} type="file" accept="image/*,.pdf" className="hidden" onChange={handleFile} />
+
+            <button
+              onClick={() => setStep('instructions')}
+              className="w-full py-2.5 text-sm text-gray-400 hover:text-gray-600 transition-colors"
+            >
+              ← Back
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ── Rent status card ──────────────────────────────────────────────────────────
+
 function RentCard({
   rentAmount,
   rentFrequency,
@@ -135,9 +247,10 @@ function RentCard({
   rentFrequency: RentFrequency
   rentDueDay: number
   transactions: Transaction[]
-  onUpload: () => void
+  onUpload: (file: File) => void
   uploading: boolean
 }) {
+  const [showModal, setShowModal] = useState(false)
   const { status, currentTx, nextDue } = getRentStatus(transactions, rentDueDay, rentFrequency)
   const days = daysUntil(nextDue)
 
@@ -159,9 +272,7 @@ function RentCard({
       chip:    'bg-amber-100 text-amber-700',
       chipTxt: 'Due',
       heading: 'Rent Due',
-      sub:     currentTx
-        ? `Due ${formatShortDate(currentTx.date)}`
-        : `Due ${formatShortDate(nextDue)}`,
+      sub:     currentTx ? `Due ${formatShortDate(currentTx.date)}` : `Due ${formatShortDate(nextDue)}`,
       nextLine: days === 0 ? 'Due today' : `Due in ${days} day${days !== 1 ? 's' : ''}`,
     },
     overdue: {
@@ -171,9 +282,7 @@ function RentCard({
       chip:    'bg-red-100 text-red-700',
       chipTxt: 'Overdue',
       heading: 'Rent Overdue',
-      sub:     currentTx
-        ? `Was due ${formatShortDate(currentTx.date)}`
-        : 'Payment not received',
+      sub:     currentTx ? `Was due ${formatShortDate(currentTx.date)}` : 'Payment not received',
       nextLine: `${Math.abs(days)} day${Math.abs(days) !== 1 ? 's' : ''} overdue`,
     },
     upcoming: {
@@ -192,43 +301,59 @@ function RentCard({
   const showCTA = status === 'due' || status === 'overdue' || status === 'upcoming'
 
   return (
-    <div className={cn('rounded-xl border p-5', c.bg)}>
-      <div className="flex items-start justify-between mb-4">
-        <div className="flex items-center gap-3">
-          <div className={cn('w-10 h-10 rounded-xl flex items-center justify-center shrink-0', c.iconBg)}>
-            {c.icon}
+    <>
+      <div className={cn('rounded-xl border p-5', c.bg)}>
+        <div className="flex items-start justify-between mb-4">
+          <div className="flex items-center gap-3">
+            <div className={cn('w-10 h-10 rounded-xl flex items-center justify-center shrink-0', c.iconBg)}>
+              {c.icon}
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-gray-700">{c.heading}</p>
+              <p className="text-xs text-gray-500 mt-0.5">{c.sub}</p>
+            </div>
           </div>
+          <span className={cn('text-xs font-semibold px-2.5 py-1 rounded-full shrink-0', c.chip)}>
+            {c.chipTxt}
+          </span>
+        </div>
+
+        <div className="flex items-end justify-between">
           <div>
-            <p className="text-sm font-semibold text-gray-700">{c.heading}</p>
-            <p className="text-xs text-gray-500 mt-0.5">{c.sub}</p>
+            <p className="text-3xl font-bold text-gray-900">{formatCurrency(rentAmount)}</p>
+            <p className="text-sm text-gray-500 mt-0.5">
+              per {rentFrequency === 'fortnightly' ? 'fortnight' : rentFrequency.replace('ly', '')}
+              {' · '}<span className={cn('font-medium', status === 'overdue' ? 'text-red-600' : 'text-gray-600')}>{c.nextLine}</span>
+            </p>
           </div>
+
+          {showCTA && (
+            <button
+              onClick={() => setShowModal(true)}
+              className={cn(
+                'flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold transition-colors shadow-sm',
+                status === 'overdue'
+                  ? 'bg-red-600 text-white hover:bg-red-700'
+                  : 'bg-gray-900 text-white hover:bg-gray-800'
+              )}
+            >
+              <PoundSterling className="w-4 h-4" />
+              Pay Now
+            </button>
+          )}
         </div>
-        <span className={cn('text-xs font-semibold px-2.5 py-1 rounded-full shrink-0', c.chip)}>
-          {c.chipTxt}
-        </span>
       </div>
 
-      <div className="flex items-end justify-between">
-        <div>
-          <p className="text-3xl font-bold text-gray-900">{formatCurrency(rentAmount)}</p>
-          <p className="text-sm text-gray-500 mt-0.5">
-            per {rentFrequency === 'fortnightly' ? 'fortnight' : rentFrequency.replace('ly', '')}
-            {' · '}<span className={cn('font-medium', status === 'overdue' ? 'text-red-600' : 'text-gray-600')}>{c.nextLine}</span>
-          </p>
-        </div>
-
-        {showCTA && (
-          <button
-            onClick={onUpload}
-            disabled={uploading}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-white border border-gray-200 shadow-sm text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50"
-          >
-            <Upload className="w-4 h-4" />
-            {uploading ? 'Uploading…' : 'Upload Proof'}
-          </button>
-        )}
-      </div>
-    </div>
+      {showModal && (
+        <PayNowModal
+          rentAmount={rentAmount}
+          dueDate={status === 'overdue' && currentTx ? new Date(currentTx.date) : nextDue}
+          onUpload={(file) => { onUpload(file); setShowModal(false) }}
+          uploading={uploading}
+          onClose={() => setShowModal(false)}
+        />
+      )}
+    </>
   )
 }
 
@@ -328,7 +453,6 @@ function PaymentHistory({ transactions }: { transactions: Transaction[] }) {
 
 export default function MyTenancyPage() {
   const queryClient = useQueryClient()
-  const fileRef = useRef<HTMLInputElement>(null)
   const [uploading, setUploading] = useState(false)
 
   const { data: tenancies = [], isLoading } = useQuery({
@@ -358,26 +482,17 @@ export default function MyTenancyPage() {
     },
   })
 
-  async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    if (!file || !tenancy) return
+  async function handleUpload(file: File) {
+    if (!tenancy) return
     setUploading(true)
     try {
-      await uploadDocument(
-        undefined,
-        file,
-        'other',
-        'Payment Proof',
-        undefined,
-        tenancy.id
-      )
+      await uploadDocument(undefined, file, 'other', 'Payment Proof', undefined, tenancy.id)
       queryClient.invalidateQueries({ queryKey: ['documents'] })
       toast.success('Payment proof uploaded')
     } catch {
       toast.error('Upload failed')
     } finally {
       setUploading(false)
-      e.target.value = ''
     }
   }
 
@@ -432,10 +547,9 @@ export default function MyTenancyPage() {
         rentFrequency={tenancy.rentFrequency}
         rentDueDay={tenancy.rentDueDay}
         transactions={rentTransactions}
-        onUpload={() => fileRef.current?.click()}
+        onUpload={handleUpload}
         uploading={uploading}
       />
-      <input ref={fileRef} type="file" accept="image/*,.pdf" className="hidden" onChange={handleUpload} />
 
       {/* Payment history */}
       <PaymentHistory transactions={rentTransactions} />

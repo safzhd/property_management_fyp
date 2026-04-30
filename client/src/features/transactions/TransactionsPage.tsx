@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Plus, Download, TrendingUp, TrendingDown, PoundSterling,
-  Clock, Search, Trash2, ChevronDown, Flag, Paperclip, X,
+  Clock, Search, Trash2, ChevronDown, Paperclip, X,
   Building2, Tag, CalendarDays, CreditCard, User, FileText, StickyNote, ZoomIn
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -72,6 +72,10 @@ function isPaidLate(tx: Transaction): boolean {
   return (new Date(tx.createdAt).getTime() - new Date(tx.date).getTime()) / 86400000 > 5
 }
 
+function toTitleCase(str: string): string {
+  return str.replace(/\w\S*/g, w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+}
+
 const PAYMENT_METHOD_LABELS: Record<string, string> = {
   bank_transfer:  'Bank Transfer',
   standing_order: 'Standing Order',
@@ -136,22 +140,21 @@ function TransactionDetailModal({
             </div>
             <div>
               <p className="text-sm font-semibold text-gray-900">
-                {tx.description || ALL_CATEGORY_LABELS[tx.category]}
+                {toTitleCase(tx.description || ALL_CATEGORY_LABELS[tx.category])}
               </p>
-              <p className="text-xs text-gray-400">{ALL_CATEGORY_LABELS[tx.category]}</p>
+              <p className="text-xs text-gray-400">
+                {ALL_CATEGORY_LABELS[tx.category]}
+                {tx.tenant ? ` · ${tx.tenant}` : ''}
+                {tx.property ? ` · ${tx.property}` : ''}
+              </p>
             </div>
           </div>
           <div className="flex items-center gap-2">
             <span className={cn('text-xs font-medium px-2 py-0.5 rounded-full',
               isPaidLate(tx) ? 'bg-yellow-100 text-yellow-700 border border-yellow-200' : STATUS_STYLES[tx.status]
             )}>
-              {isPaidLate(tx) ? 'Paid Late' : tx.status.charAt(0).toUpperCase() + tx.status.slice(1)}
+              {isPaidLate(tx) ? 'Paid Late' : tx.status === 'late' ? 'Overdue' : tx.status.charAt(0).toUpperCase() + tx.status.slice(1)}
             </span>
-            {overdue && (
-              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-semibold bg-red-100 text-red-600">
-                <Flag className="w-2.5 h-2.5" /> Overdue
-              </span>
-            )}
             <button
               onClick={onClose}
               className="flex items-center justify-center w-7 h-7 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
@@ -289,17 +292,13 @@ function TransactionRow({
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
           <p className="text-sm font-medium text-gray-800 truncate">
-            {tx.description || ALL_CATEGORY_LABELS[tx.category]}
+            {toTitleCase(tx.description || ALL_CATEGORY_LABELS[tx.category])}
           </p>
-          {overdue && (
-            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-semibold bg-red-100 text-red-600 shrink-0">
-              <Flag className="w-2.5 h-2.5" /> Overdue
-            </span>
-          )}
         </div>
         <div className="flex items-center gap-2 mt-0.5">
           <p className="text-xs text-gray-400 truncate">
             {ALL_CATEGORY_LABELS[tx.category]}
+            {tx.tenant ? ` · ${tx.tenant}` : ''}
             {tx.supplier ? ` · ${tx.supplier}` : ''}
             {tx.property ? ` · ${tx.property}` : ''}
           </p>
@@ -319,7 +318,7 @@ function TransactionRow({
       <span className={cn('text-xs font-medium px-2 py-0.5 rounded-full shrink-0 hidden sm:inline-flex',
         isPaidLate(tx) ? 'bg-yellow-100 text-yellow-700 border border-yellow-200' : STATUS_STYLES[tx.status]
       )}>
-        {isPaidLate(tx) ? 'Paid Late' : tx.status.charAt(0).toUpperCase() + tx.status.slice(1)}
+        {isPaidLate(tx) ? 'Paid Late' : tx.status === 'late' ? 'Overdue' : tx.status.charAt(0).toUpperCase() + tx.status.slice(1)}
       </span>
 
       {/* Amount */}

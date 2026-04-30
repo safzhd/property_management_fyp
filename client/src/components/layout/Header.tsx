@@ -3,7 +3,8 @@ import { useLocation } from 'react-router-dom'
 import { Bell, Home, FileCheck, PoundSterling } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import { useAuthStore } from '@/store/authStore'
-import { getNotifications, getActivity, type ActivityEvent } from '@/api/notifications'
+import { cn } from '@/lib/utils'
+import { getSmartAlerts, getActivity, type ActivityEvent } from '@/api/notifications'
 
 const pageTitles: Record<string, string> = {
   '/app/dashboard':     'Dashboard',
@@ -67,11 +68,11 @@ export function Header() {
 
   const isLandlord = user?.role === 'landlord' || user?.role === 'admin'
 
-  const { data: notifData } = useQuery({
-    queryKey: ['notifications-header'],
-    queryFn:  () => getNotifications(),
+  const { data: alertsData } = useQuery({
+    queryKey: ['smart-alerts-header'],
+    queryFn:  getSmartAlerts,
     enabled:  open,
-    staleTime: 30_000,
+    staleTime: 60_000,
   })
 
   const { data: activityData } = useQuery({
@@ -140,14 +141,21 @@ export function Header() {
               {/* Alerts tab */}
               {activeTab === 'alerts' && (
                 <div className="max-h-72 overflow-y-auto divide-y divide-gray-50">
-                  {!notifData || notifData.notifications.length === 0 ? (
-                    <p className="px-4 py-6 text-center text-xs text-gray-400">No notifications</p>
+                  {!alertsData || alertsData.alerts.length === 0 ? (
+                    <p className="px-4 py-6 text-center text-xs text-gray-400">No alerts</p>
                   ) : (
-                    notifData.notifications.slice(0, 8).map(n => (
-                      <div key={n.id} className="px-4 py-3">
-                        <p className="text-xs font-medium text-gray-800 leading-snug">{n.title}</p>
-                        <p className="text-[11px] text-gray-500 mt-0.5 leading-snug">{n.message}</p>
-                        <p className="text-[10px] text-gray-400 mt-1">{timeAgo(n.createdAt)}</p>
+                    alertsData.alerts.slice(0, 8).map(a => (
+                      <div key={a.id} className="flex items-start gap-2.5 px-4 py-3">
+                        <span className={cn('mt-1 w-2 h-2 rounded-full shrink-0', {
+                          'bg-red-500':    a.severity === 'high',
+                          'bg-yellow-400': a.severity === 'warning',
+                          'bg-sky-400':    a.severity === 'normal',
+                          'bg-gray-300':   a.severity === 'low',
+                        })} />
+                        <div>
+                          <p className="text-xs font-medium text-gray-800 leading-snug">{a.title}</p>
+                          <p className="text-[11px] text-gray-500 mt-0.5 leading-snug">{a.message}</p>
+                        </div>
                       </div>
                     ))
                   )}

@@ -11,7 +11,9 @@ import { cn } from '@/lib/utils'
 import { getTenancy, transitionTenancy, updateTenancyCompliance } from '@/api/tenancies'
 import { uploadDocument, getPropertyDocuments } from '@/api/documents'
 import { getSmartAlerts } from '@/api/notifications'
+import { getTransactions } from '@/api/transactions'
 import type { Tenancy, LifecycleStatus } from '@/types/tenancy'
+import type { Transaction } from '@/types/transaction'
 
 // ── Email template ────────────────────────────────────────────────────────────
 
@@ -863,6 +865,89 @@ function ComplianceCheck({
   )
 }
 
+// ── Payment history ───────────────────────────────────────────────────────────
+
+function isPaidLate(tx: Transaction): boolean {
+  if (tx.status !== 'paid' && tx.status !== 'reconciled') return false
+  return (new Date(tx.createdAt).getTime() - new Date(tx.date).getTime()) / 86400000 > 5
+}
+
+const TX_CHIP: Record<string, { label: string; cls: string }> = {
+  paid:       { label: 'Paid',     cls: 'bg-emerald-100 text-emerald-700' },
+  reconciled: { label: 'Paid',     cls: 'bg-emerald-100 text-emerald-700' },
+  pending:    { label: 'Pending',  cls: 'bg-amber-100 text-amber-700' },
+  late:       { label: 'Overdue',  cls: 'bg-red-100 text-red-600' },
+  partial:    { label: 'Partial',  cls: 'bg-blue-100 text-blue-700' },
+  failed:     { label: 'Failed',   cls: 'bg-red-100 text-red-600' },
+  refunded:   { label: 'Refunded', cls: 'bg-purple-100 text-purple-700' },
+}
+
+function RentPaymentHistory({ transactions }: { transactions: Transaction[] }) {
+  const [expanded, setExpanded] = useState(false)
+  const sorted = [...transactions].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+  const shown = expanded ? sorted : sorted.slice(0, 4)
+
+  if (sorted.length === 0) {
+    return (
+      <div className="px-4 py-6 text-center">
+        <p className="text-xs text-gray-400">No payment records yet.</p>
+      </div>
+    )
+  }
+
+  return (
+    <>
+      <div className="divide-y divide-gray-100">
+        {shown.map(tx => {
+          const late = isPaidLate(tx)
+          const chip = late
+            ? { label: 'Paid Late', cls: 'bg-yellow-100 text-yellow-700' }
+            : TX_CHIP[tx.status] ?? { label: tx.status, cls: 'bg-gray-100 text-gray-600' }
+          return (
+            <div key={tx.id} className="flex items-center justify-between px-4 py-3">
+              <div className="flex items-center gap-3">
+                <div className={cn(
+                  'w-7 h-7 rounded-lg flex items-center justify-center shrink-0',
+                  tx.status === 'paid' || tx.status === 'reconciled' ? 'bg-emerald-50' : 'bg-gray-100'
+                )}>
+                  <PoundSterling className={cn(
+                    'w-3 h-3',
+                    tx.status === 'paid' || tx.status === 'reconciled' ? 'text-emerald-600' : 'text-gray-400'
+                  )} />
+                </div>
+                <div>
+                  <p className="text-xs font-medium text-gray-800">
+                    {tx.description || 'Rent Payment'}
+                  </p>
+                  <p className="text-xs text-gray-400">
+                    {new Date(tx.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2.5">
+                <span className={cn('text-xs font-semibold px-2 py-0.5 rounded-full', chip.cls)}>
+                  {chip.label}
+                </span>
+                <p className="text-xs font-bold text-gray-800 w-14 text-right">
+                  {new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP', minimumFractionDigits: 0 }).format(tx.amount)}
+                </p>
+              </div>
+            </div>
+          )
+        })}
+      </div>
+      {sorted.length > 4 && (
+        <button
+          onClick={() => setExpanded(e => !e)}
+          className="w-full flex items-center justify-center gap-1 py-2.5 text-xs font-medium text-gray-500 hover:bg-gray-50 border-t border-gray-100 transition-colors"
+        >
+          {expanded ? 'Show less' : `Show ${sorted.length - 4} more`}
+        </button>
+      )}
+    </>
+  )
+}
+
 // ── Main ──────────────────────────────────────────────────────────────────────
 
 export default function TenancyDetailPage() {
@@ -889,6 +974,12 @@ export default function TenancyDetailPage() {
   const { data: alertsData } = useQuery({
     queryKey: ['smart-alerts'],
     queryFn: () => getSmartAlerts(),
+  })
+
+  const { data: rentTransactions = [] } = useQuery({
+    queryKey: ['transactions', id],
+    queryFn: () => getTransactions({ tenancyId: id }),
+    enabled: Boolean(id),
   })
 
   const rentOverdueAlert = (alertsData?.alerts ?? []).find(
@@ -1169,6 +1260,11 @@ export default function TenancyDetailPage() {
         />
         <DetailRow label="Frequency" value={tenancy.rentFrequency.charAt(0).toUpperCase() + tenancy.rentFrequency.slice(1)} />
         <DetailRow label="Due day" value={`${tenancy.rentDueDay}${tenancy.rentFrequency === 'monthly' ? ' of month' : ''}`} />
+      </Section>
+
+      {/* Payment History */}
+      <Section title={`Payment History${rentTransactions.length > 0 ? ` · ${rentTransactions.length} payment${rentTransactions.length !== 1 ? 's' : ''}` : ''}`}>
+        <RentPaymentHistory transactions={rentTransactions} />
       </Section>
 
       {/* Deposit */}
