@@ -1,0 +1,186 @@
+---
+title: Property Management App — Class Diagram
+---
+classDiagram
+    direction TB
+
+    class User {
+        +UUID id
+        +String email
+        +String passwordHash
+        +Enum role
+        +String givenName
+        +String lastName
+        +String phone
+        +Boolean isActive
+        +DateTime createdAt
+        +login()
+        +register()
+    }
+
+    class Property {
+        +UUID id
+        +UUID landlordId
+        +String propertyName
+        +Enum propertyType
+        +String addressLine1
+        +String city
+        +String postcode
+        +Boolean isHmo
+        +Boolean hmoLicenceRequired
+        +Enum status
+        +DateTime createdAt
+    }
+
+    class Room {
+        +UUID id
+        +UUID propertyId
+        +String roomName
+        +Decimal roomSizeSqm
+        +Enum roomType
+        +Enum bathroomType
+        +Decimal rentAmount
+        +Boolean isAvailable
+    }
+
+    class Tenancy {
+        +UUID id
+        +UUID tenantId
+        +UUID propertyId
+        +UUID roomId
+        +Date startDate
+        +Date endDate
+        +Enum tenancyType
+        +Enum lifecycleStatus
+        +Decimal rentAmount
+        +Enum rentFrequency
+        +Int rentDueDay
+        +Decimal depositAmount
+        +Enum depositScheme
+        +String depositReference
+        +Date depositProtectedDate
+        +Boolean howToRentGuideProvided
+        +Boolean tenantInfoSheetProvided
+        +Date noticeServedDate
+        +String evictionGrounds
+        +advance()
+        +cancel()
+        +serveNotice()
+    }
+
+    class Transaction {
+        +UUID id
+        +UUID propertyId
+        +UUID tenancyId
+        +Enum type
+        +Enum category
+        +Decimal amount
+        +Date date
+        +String description
+        +Enum status
+        +Boolean isOverdue
+        +DateTime createdAt
+        +markPaid()
+        +isPaidLate()
+    }
+
+    class Document {
+        +UUID id
+        +UUID propertyId
+        +UUID tenancyId
+        +UUID uploadedBy
+        +String fileName
+        +Enum documentType
+        +String storagePath
+        +Int fileSize
+        +String mimeType
+        +DateTime createdAt
+        +upload()
+        +download()
+        +delete()
+    }
+
+    class ComplianceCertificate {
+        +UUID id
+        +UUID propertyId
+        +Enum certificateType
+        +Date issueDate
+        +Date expiryDate
+        +String contractorName
+        +Decimal cost
+        +Enum status
+        +isExpiringSoon()
+        +isExpired()
+    }
+
+    class MaintenanceRequest {
+        +UUID id
+        +UUID propertyId
+        +UUID tenantId
+        +Enum category
+        +String title
+        +Enum priority
+        +Enum status
+        +DateTime reportedDate
+        +DateTime resolvedDate
+        +Decimal actualCost
+        +acknowledge()
+        +resolve()
+        +close()
+    }
+
+    class Notification {
+        +UUID id
+        +UUID userId
+        +Enum type
+        +String title
+        +String message
+        +Enum priority
+        +DateTime readAt
+        +Boolean isRead
+        +markAsRead()
+    }
+
+    class RefreshToken {
+        +UUID id
+        +UUID userId
+        +String tokenHash
+        +DateTime expiresAt
+        +DateTime revokedAt
+        +revoke()
+    }
+
+    class AuditLog {
+        +UUID id
+        +UUID userId
+        +String action
+        +String entityType
+        +UUID entityId
+        +JSON oldValues
+        +JSON newValues
+        +String ipAddress
+        +DateTime createdAt
+    }
+
+    %% Relationships
+    User "1" --> "0..*" Property : owns
+    User "1" --> "0..*" Tenancy : is tenant in
+    User "1" --> "0..*" Notification : receives
+    User "1" --> "0..*" RefreshToken : has
+    User "1" --> "0..*" MaintenanceRequest : raises
+    User "1" --> "0..*" Document : uploads
+    User "1" --> "0..*" AuditLog : recorded in
+
+    Property "1" --> "1..*" Room : contains
+    Property "1" --> "0..*" Tenancy : has
+    Property "1" --> "0..*" Transaction : has
+    Property "1" --> "0..*" ComplianceCertificate : has
+    Property "1" --> "0..*" MaintenanceRequest : has
+    Property "1" --> "0..*" Document : has
+
+    Room "1" --> "0..1" Tenancy : occupied by
+
+    Tenancy "1" --> "0..*" Transaction : generates
+    Tenancy "1" --> "0..*" Document : linked to
+
+    ComplianceCertificate "1" --> "0..1" Document : evidenced by

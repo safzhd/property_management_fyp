@@ -1,0 +1,164 @@
+---
+title: Saphyroo HMO Platform — Sequence Diagrams
+---
+
+%% ─────────────────────────────────────────────
+%% 1. User Authentication (Login)
+%% ─────────────────────────────────────────────
+sequenceDiagram
+    title 1. User Login
+
+    actor User
+    participant Frontend
+    participant AuthRoute as POST /auth/login
+    participant DB as MySQL
+
+    User->>Frontend: Enter email + password
+    Frontend->>AuthRoute: POST { email, password }
+    AuthRoute->>DB: SELECT user WHERE email = ?
+    DB-->>AuthRoute: User record
+    AuthRoute->>AuthRoute: bcrypt.compare(password, hash)
+    alt Invalid credentials
+        AuthRoute-->>Frontend: 401 Unauthorized
+        Frontend-->>User: Error message
+    else Valid
+        AuthRoute->>AuthRoute: Sign JWT access token (15m)
+        AuthRoute->>DB: INSERT refresh_token (7d)
+        AuthRoute-->>Frontend: { accessToken, refreshToken, user }
+        Frontend->>Frontend: Store tokens, set role
+        alt Role = tenant
+            Frontend-->>User: Redirect → /app/my-tenancy
+        else Role = landlord/admin
+            Frontend-->>User: Redirect → /app/dashboard
+        end
+    end
+
+%% ─────────────────────────────────────────────
+%% 2. Add Tenancy Flow
+%% ─────────────────────────────────────────────
+sequenceDiagram
+    title 2. Add Tenancy (Landlord)
+
+    actor Landlord
+    participant Frontend
+    participant UsersRoute as POST /users
+    participant TenanciesRoute as POST /tenancies
+    participant TxRoute as POST /transactions/generate
+    participant DB as MySQL
+
+    Landlord->>Frontend: Open Add Tenancy wizard
+    Landlord->>Frontend: Step 1 — Select New Tenant
+    Frontend->>UsersRoute: POST { email, givenName, lastName, phone }
+    UsersRoute->>DB: SELECT email (dupe check)
+    alt Duplicate email
+        UsersRoute-->>Frontend: 409 — Account already exists
+        Frontend-->>Landlord: "Use Existing Tenant"
+    else New tenant
+        UsersRoute->>DB: INSERT user (role=tenant)
+        UsersRoute-->>Frontend: { user }
+    end
+
+    Landlord->>Frontend: Steps 2–4 — Property, Terms, Rent & Deposit
+    Landlord->>Frontend: Step 5 — Review & Submit
+    Frontend->>TenanciesRoute: POST tenancy payload
+    TenanciesRoute->>DB: INSERT tenancy (status=pending)
+    TenanciesRoute->>TxRoute: Generate rent schedule
+    TxRoute->>DB: INSERT transactions (status=pending, per frequency)
+    TenanciesRoute-->>Frontend: { tenancy }
+    Frontend-->>Landlord: Redirect → TenancyDetailPage
+
+%% ─────────────────────────────────────────────
+%% 3. Tenancy Lifecycle — Onboarding to Active
+%% ─────────────────────────────────────────────
+sequenceDiagram
+    title 3. Tenancy Lifecycle — Onboarding to Active
+
+    actor Landlord
+    participant Frontend
+    participant TenanciesRoute as PATCH /tenancies/:id/transition
+    participant DocsRoute as POST /documents
+    participant DB as MySQL
+
+    Landlord->>Frontend: Send contract email (mailto link)
+    Landlord->>Frontend: Upload signed tenancy agreement
+    Frontend->>DocsRoute: POST file (documentType=tenancy_agreement)
+    DocsRoute->>DB: INSERT document
+    DocsRoute-->>Frontend: { document }
+
+    Landlord->>Frontend: Mark compliance items done
+    Frontend->>TenanciesRoute: PATCH compliance flags
+    TenanciesRoute->>DB: UPDATE tenancy SET how_to_rent_guide_provided=1, etc.
+
+    Frontend->>Frontend: getComplianceBlockers() — all clear?
+    alt Blockers remain
+        Frontend-->>Landlord: Advance button greyed — tooltip lists blockers
+    else All clear
+        Landlord->>Frontend: Click Advance to Active
+        Frontend->>TenanciesRoute: PATCH { status: 'active' }
+        TenanciesRoute->>DB: UPDATE tenancy SET lifecycle_status='active'
+        TenanciesRoute-->>Frontend: Updated tenancy
+        Frontend-->>Landlord: Status → Active
+    end
+
+%% ─────────────────────────────────────────────
+%% 4. Tenant Rent Payment Flow
+%% ─────────────────────────────────────────────
+sequenceDiagram
+    title 4. Tenant Rent Payment & Proof Upload
+
+    actor Tenant
+    participant Frontend
+    participant TxRoute as GET /transactions
+    participant DocsRoute as POST /documents
+    participant SmartAlerts as GET /notifications/smart
+    participant DB as MySQL
+
+    Tenant->>Frontend: View My Tenancy page
+    Frontend->>TxRoute: GET transactions?tenancyId=...
+    TxRoute->>DB: SELECT rent transactions for tenant
+    DB-->>TxRoute: Transactions
+    TxRoute-->>Frontend: { transactions }
+    Frontend->>Frontend: getRentStatus() → due / overdue / upcoming
+
+    Tenant->>Frontend: Click "Pay Now"
+    Frontend-->>Tenant: Modal — amount, due date, bank transfer details
+
+    Tenant->>Frontend: Click "Mark as Paid"
+    Frontend-->>Tenant: Step 2 — Upload proof area
+
+    Tenant->>Frontend: Select receipt file
+    Frontend->>DocsRoute: POST file (documentType=other, description=Payment Proof)
+    DocsRoute->>DB: INSERT document (tenancy_id=...)
+    DocsRoute-->>Frontend: { document }
+    Frontend-->>Tenant: Toast — "Payment proof uploaded"
+
+    note over SmartAlerts,DB: Landlord's smart alert detects late payment
+    Frontend->>SmartAlerts: GET /notifications/smart (landlord)
+    SmartAlerts->>DB: DATEDIFF(created_at, date) > 5 → paid late
+    SmartAlerts-->>Frontend: Alert — "Rent paid late — X days"
+
+%% ─────────────────────────────────────────────
+%% 5. Activity Feed (Dashboard)
+%% ─────────────────────────────────────────────
+sequenceDiagram
+    title 5. Dashboard Activity Feed
+
+    actor Landlord
+    participant Frontend
+    participant ActivityRoute as GET /notifications/activity
+    participant DB as MySQL
+
+    Landlord->>Frontend: Open Dashboard
+    Frontend->>ActivityRoute: GET /notifications/activity
+    ActivityRoute->>DB: SELECT recent tenancies (60 days)
+    ActivityRoute->>DB: SELECT recent documents (tenancy-linked, 60 days)
+    ActivityRoute->>DB: SELECT paid rent transactions (60 days)
+    DB-->>ActivityRoute: 3 result sets
+    ActivityRoute->>ActivityRoute: Merge + sort by created_at DESC + flag paidLate
+    ActivityRoute-->>Frontend: { events[20] }
+    Frontend-->>Landlord: ActivityFeed widget rendered
+
+    loop Every 60 seconds
+        Frontend->>ActivityRoute: GET /notifications/activity (refetchInterval)
+        ActivityRoute-->>Frontend: Updated events
+    end

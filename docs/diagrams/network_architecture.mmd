@@ -1,0 +1,55 @@
+---
+title: Saphyroo — System Architecture / Network Diagram
+---
+flowchart LR
+    subgraph CLIENTS["Client Layer"]
+        Landlord(["👤 Landlord"])
+        Tenant(["👤 Tenant"])
+    end
+
+    subgraph FRONTEND["Frontend — localhost:5173"]
+        Vite["Vite Dev Server"]
+        React["React + TanStack Query"]
+        Router["React Router v6"]
+    end
+
+    subgraph BACKEND["Backend — localhost:3000"]
+        Fastify["Fastify v5"]
+        JWT["JWT Middleware"]
+        subgraph ROUTES["REST API Routes"]
+            Auth["/auth"]
+            Users["/users"]
+            Properties["/properties"]
+            Rooms["/rooms"]
+            Tenancies["/tenancies"]
+            Transactions["/transactions"]
+            Documents["/documents"]
+            Notifications["/notifications"]
+            Compliance["/compliance"]
+            Maintenance["/maintenance"]
+        end
+    end
+
+    subgraph DATA["Data Layer"]
+        MySQL[("MySQL Database")]
+        Files[["File Storage\nuploads/"]]
+    end
+
+    Landlord -->|HTTPS| Vite
+    Tenant -->|HTTPS| Vite
+    Vite --> React
+    React --> Router
+    React -->|"HTTP REST\nBearer Token"| Fastify
+    Fastify --> JWT
+    JWT --> ROUTES
+    Auth --> MySQL
+    Users --> MySQL
+    Properties --> MySQL
+    Rooms --> MySQL
+    Tenancies --> MySQL
+    Transactions --> MySQL
+    Notifications --> MySQL
+    Compliance --> MySQL
+    Maintenance --> MySQL
+    Documents --> MySQL
+    Documents -->|"read/write"| Files
