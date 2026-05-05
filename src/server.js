@@ -250,6 +250,7 @@ async function registerRoutes() {
   await fastify.register(require('./routes/transactions'), { prefix: '/api/transactions' });
   await fastify.register(require('./routes/documents'), { prefix: '/api/documents' });
   await fastify.register(require('./routes/notifications'), { prefix: '/api/notifications' });
+  await fastify.register(require('./routes/inspections'), { prefix: '/api/inspections' });
 }
 
 // =============================================

@@ -17,6 +17,8 @@ import DashboardPage from '@/features/dashboard/DashboardPage'
 import DocumentsPage from '@/features/documents/DocumentsPage'
 import NotificationsPage from '@/features/notifications/NotificationsPage'
 import MyTenancyPage from '@/features/tenant/MyTenancyPage'
+import MaintenancePage from '@/features/maintenance/MaintenancePage'
+import InspectionsPage from '@/features/inspections/InspectionsPage'
 
 // ── Role-aware default redirect ──────────────────────────────────────────────
 function DefaultRedirect() {
@@ -83,6 +85,8 @@ export const router = createBrowserRouter([
       { path: 'tenancies/new',       element: <AddTenancyPage /> },
       { path: 'tenancies/:id',       element: <TenancyDetailPage /> },
       { path: 'transactions',        element: <TransactionsPage /> },
+      { path: 'maintenance',         element: <MaintenancePage /> },
+      { path: 'inspections',         element: <InspectionsPage /> },
       { path: 'documents',           element: <DocumentsPage /> },
       { path: 'notifications',       element: <NotificationsPage /> },
     ],
@@ -180,6 +184,8 @@ export const router = createBrowserRouter([
             ),
           },
           // ── All roles ─────────────────────────────────────────────────
+          { path: 'maintenance',   element: <MaintenancePage /> },
+          { path: 'inspections',   element: <InspectionsPage /> },
           { path: 'documents',     element: <DocumentsPage /> },
           { path: 'notifications', element: <NotificationsPage /> },
 

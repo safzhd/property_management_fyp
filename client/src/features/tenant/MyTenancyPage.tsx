@@ -242,6 +242,7 @@ function RentCard({
   transactions,
   onUpload,
   uploading,
+  lifecycleStatus,
 }: {
   rentAmount: number
   rentFrequency: RentFrequency
@@ -249,6 +250,7 @@ function RentCard({
   transactions: Transaction[]
   onUpload: (file: File) => void
   uploading: boolean
+  lifecycleStatus: string
 }) {
   const [showModal, setShowModal] = useState(false)
   const { status, currentTx, nextDue } = getRentStatus(transactions, rentDueDay, rentFrequency)
@@ -298,7 +300,8 @@ function RentCard({
   }
 
   const c = configs[status]
-  const showCTA = status === 'due' || status === 'overdue' || status === 'upcoming'
+  const canPayOnStatus = lifecycleStatus === 'active' || lifecycleStatus === 'notice'
+  const showCTA = canPayOnStatus && (status === 'due' || status === 'overdue' || status === 'upcoming')
 
   return (
     <>
@@ -549,6 +552,7 @@ export default function MyTenancyPage() {
         transactions={rentTransactions}
         onUpload={handleUpload}
         uploading={uploading}
+        lifecycleStatus={tenancy.lifecycleStatus}
       />
 
       {/* Payment history */}

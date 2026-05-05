@@ -959,10 +959,11 @@ export default function TenancyDetailPage() {
   const [showNoticeModal, setShowNoticeModal]       = useState(false)
   const [uploadingContract, setUploadingContract]   = useState(false)
 
-  const { data: tenancy, isLoading } = useQuery({
+  const { data: tenancy, isLoading, isError, error } = useQuery({
     queryKey: ['tenancy', id],
     queryFn: () => getTenancy(id!),
     enabled: Boolean(id),
+    retry: false,
   })
 
   const { data: tenancyDocs = [] } = useQuery({
@@ -987,7 +988,7 @@ export default function TenancyDetailPage() {
   )
 
   const signedContract = tenancyDocs.find(
-    d => d.documentType === 'tenancy_agreement' && d.tenancyId === id
+    d => d.documentType === 'tenancy_agreement' && (d.tenancyId === id || d.tenancyId == null)
   )
 
   async function handleContractUpload(e: React.ChangeEvent<HTMLInputElement>) {
@@ -995,7 +996,7 @@ export default function TenancyDetailPage() {
     if (!file || !tenancy) return
     setUploadingContract(true)
     try {
-      await uploadDocument(tenancy.propertyId, file, 'tenancy_agreement', 'Signed tenancy agreement')
+      await uploadDocument(tenancy.propertyId, file, 'tenancy_agreement', 'Signed tenancy agreement', undefined, tenancy.id)
       queryClient.invalidateQueries({ queryKey: ['documents', tenancy.propertyId] })
       toast.success('Signed contract uploaded to documents')
     } catch {
@@ -1040,6 +1041,16 @@ export default function TenancyDetailPage() {
     return (
       <div className="p-6 max-w-2xl mx-auto space-y-4">
         {[1, 2, 3].map(i => <div key={i} className="h-32 rounded-xl bg-gray-100 animate-pulse" />)}
+      </div>
+    )
+  }
+
+  if (isError) {
+    const msg = (error as any)?.response?.data?.error ?? (error as any)?.message ?? 'Unknown error'
+    return (
+      <div className="p-6 text-center text-gray-400">
+        <p className="font-medium text-gray-600">Failed to load tenancy</p>
+        <p className="text-sm mt-1">{msg}</p>
       </div>
     )
   }
@@ -1306,31 +1317,18 @@ export default function TenancyDetailPage() {
           isUpdating={complianceMutation.isPending}
         />
         {tenancy.depositAmount && (
-          <div className="flex items-center justify-between gap-3 py-1.5 border-b border-gray-50 last:border-0">
-            <div className="flex items-center gap-2">
-              {tenancy.depositProtectedDate
-                ? <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
-                : <Circle className="w-4 h-4 text-gray-300 shrink-0" />}
-              <div>
-                <p className="text-xs font-medium text-gray-800">Deposit registered with scheme</p>
-                {tenancy.depositProtectedDate && (
-                  <p className="text-xs text-gray-400">{fmtDate(tenancy.depositProtectedDate)}</p>
-                )}
-              </div>
-            </div>
-            {!tenancy.depositProtectedDate && (
-              <button
-                onClick={() => {
-                  const today = new Date().toISOString().split('T')[0]
-                  complianceMutation.mutate({ depositProtectedDate: today })
-                }}
-                disabled={complianceMutation.isPending}
-                className="text-xs px-2.5 py-1 rounded-lg border border-sky-300 text-sky-600 hover:bg-sky-50 font-medium transition-colors"
-              >
-                Mark done
-              </button>
-            )}
-          </div>
+          <ComplianceCheck
+            label="Deposit registered with scheme"
+            done={!!tenancy.depositProtectedDate}
+            date={tenancy.depositProtectedDate}
+            onToggle={() => {
+              const today = new Date().toISOString().split('T')[0]
+              complianceMutation.mutate({
+                depositProtectedDate: tenancy.depositProtectedDate ? null : today,
+              })
+            }}
+            isUpdating={complianceMutation.isPending}
+          />
         )}
       </Section>
     </div>

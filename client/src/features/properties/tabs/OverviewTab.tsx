@@ -165,7 +165,16 @@ function EditForm({
 
   const mutation = useMutation({
     mutationFn: async (data: EditForm) => {
-      await updateProperty(property.id, data)
+      const payload = {
+        ...data,
+        prsRegistrationDate: data.prsRegistrationDate
+          ? data.prsRegistrationDate.split('T')[0]
+          : data.prsRegistrationDate,
+        hmoLicenceExpiry: data.hmoLicenceExpiry
+          ? data.hmoLicenceExpiry.split('T')[0]
+          : data.hmoLicenceExpiry,
+      }
+      await updateProperty(property.id, payload)
       if (markedForDeletion.size > 0) {
         await Promise.all([...markedForDeletion].map(id => deleteDocument(id)))
       }
@@ -182,7 +191,12 @@ function EditForm({
       toast.success('Property updated')
       onCancel()
     },
-    onError: () => toast.error('Failed to update property'),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    onError: (err: any) => {
+      const detail = err?.response?.data?.details
+      const msg = detail ? JSON.stringify(detail) : (err?.response?.data?.error ?? err?.message ?? 'Unknown error')
+      toast.error(`Update failed: ${msg}`)
+    },
   })
 
   return (

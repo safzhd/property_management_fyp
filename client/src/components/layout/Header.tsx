@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react'
+import type React from 'react'
 import { useLocation } from 'react-router-dom'
-import { Bell, Home, FileCheck, PoundSterling } from 'lucide-react'
+import { Bell, Home, FileCheck, PoundSterling, Wrench, Menu } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import { useAuthStore } from '@/store/authStore'
 import { cn } from '@/lib/utils'
@@ -11,9 +12,11 @@ const pageTitles: Record<string, string> = {
   '/app/properties':    'Properties',
   '/app/rooms':         'Rooms',
   '/app/tenancies':     'Tenancies',
+  '/app/transactions':  'Transactions',
   '/app/payments':      'Payments',
   '/app/compliance':    'Compliance',
   '/app/maintenance':   'Maintenance',
+  '/app/inspections':   'Inspections',
   '/app/documents':     'Documents',
   '/app/notifications': 'Notifications',
   '/app/my-tenancy':    'My Tenancy',
@@ -46,19 +49,21 @@ function timeAgo(dateStr: string) {
   return `${Math.floor(hrs / 24)}d ago`
 }
 
-const EVENT_ICON: Record<ActivityEvent['type'], JSX.Element> = {
+const EVENT_ICON: Record<ActivityEvent['type'], React.ReactElement> = {
   tenancy_created:   <Home className="w-3 h-3" />,
   document_uploaded: <FileCheck className="w-3 h-3" />,
   payment_received:  <PoundSterling className="w-3 h-3" />,
+  maintenance_new:   <Wrench className="w-3 h-3" />,
 }
 
 const EVENT_DOT: Record<ActivityEvent['type'], string> = {
   tenancy_created:   'bg-sky-500',
   document_uploaded: 'bg-violet-500',
   payment_received:  'bg-emerald-500',
+  maintenance_new:   'bg-orange-500',
 }
 
-export function Header() {
+export function Header({ onMenuToggle }: { onMenuToggle: () => void }) {
   const location  = useLocation()
   const user      = useAuthStore((s) => s.user)
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -93,11 +98,20 @@ export function Header() {
   }
 
   const normalisedPath = location.pathname.replace(/^\/dev/, '/app')
-  const title = pageTitles[normalisedPath] ?? 'PropManage'
+  const title = pageTitles[normalisedPath]
+    ?? (normalisedPath.startsWith('/app/properties/') ? 'Properties'
+      : normalisedPath.startsWith('/app/tenancies/')  ? 'Tenancies'
+      : normalisedPath.startsWith('/app/inspections/') ? 'Inspections'
+      : 'Proply360')
 
   return (
-    <header className="flex items-center justify-between px-6 h-16 bg-white border-b border-gray-200 shrink-0">
-      <h1 className="text-base font-semibold text-gray-900">{title}</h1>
+    <header className="flex items-center justify-between px-4 sm:px-6 h-16 bg-white border-b border-gray-200 shrink-0">
+      <div className="flex items-center gap-3">
+        <button onClick={onMenuToggle} className="sm:hidden p-1.5 rounded-lg text-gray-500 hover:bg-gray-100">
+          <Menu className="w-5 h-5" />
+        </button>
+        <h1 className="text-base font-semibold text-gray-900">{title}</h1>
+      </div>
 
       <div className="flex items-center gap-3">
         {/* Bell with dropdown */}
@@ -146,12 +160,18 @@ export function Header() {
                   ) : (
                     alertsData.alerts.slice(0, 8).map(a => (
                       <div key={a.id} className="flex items-start gap-2.5 px-4 py-3">
-                        <span className={cn('mt-1 w-2 h-2 rounded-full shrink-0', {
-                          'bg-red-500':    a.severity === 'high',
-                          'bg-yellow-400': a.severity === 'warning',
-                          'bg-sky-400':    a.severity === 'normal',
-                          'bg-gray-300':   a.severity === 'low',
-                        })} />
+                        {a.type === 'maintenance_new' ? (
+                          <span className="mt-0.5 p-1 rounded-md bg-orange-500 text-white shrink-0">
+                            <Wrench className="w-3 h-3" />
+                          </span>
+                        ) : (
+                          <span className={cn('mt-1 w-2 h-2 rounded-full shrink-0', {
+                            'bg-red-500':    a.severity === 'high',
+                            'bg-yellow-400': a.severity === 'warning',
+                            'bg-sky-400':    a.severity === 'normal',
+                            'bg-gray-300':   a.severity === 'low',
+                          })} />
+                        )}
                         <div>
                           <p className="text-xs font-medium text-gray-800 leading-snug">{a.title}</p>
                           <p className="text-[11px] text-gray-500 mt-0.5 leading-snug">{a.message}</p>
@@ -187,8 +207,9 @@ export function Header() {
                           <p className="text-[10px] text-gray-400 mt-0.5">{timeAgo(ev.createdAt)}</p>
                         </div>
                         <span className={`mt-0.5 p-1 rounded-md text-white shrink-0 ${
-                          ev.type === 'payment_received' ? 'bg-emerald-500' :
-                          ev.type === 'document_uploaded' ? 'bg-violet-500' : 'bg-sky-500'
+                          ev.type === 'payment_received'  ? 'bg-emerald-500' :
+                          ev.type === 'document_uploaded' ? 'bg-violet-500' :
+                          ev.type === 'maintenance_new'   ? 'bg-orange-500' : 'bg-sky-500'
                         }`}>
                           {EVENT_ICON[ev.type]}
                         </span>
@@ -211,12 +232,6 @@ export function Header() {
           )}
         </div>
 
-        {/* Avatar */}
-        {user && (
-          <div className="flex items-center justify-center w-8 h-8 rounded-full bg-sky-300/20 text-sky-500 text-xs font-bold select-none">
-            {user.givenName[0]}{user.lastName[0]}
-          </div>
-        )}
       </div>
     </header>
   )

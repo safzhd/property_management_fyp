@@ -605,6 +605,40 @@ async function notificationsRoutes(fastify, options) {
         });
       }
 
+      // Open maintenance requests
+      const maintenanceQuery = role === 'admin'
+        ? `SELECT m.id, m.title, m.priority, m.created_at,
+                  CONCAT(u.given_name, ' ', u.last_name) AS tenant_name,
+                  COALESCE(p.property_name, p.address_line_1) AS property_name
+           FROM maintenance_requests m
+           JOIN properties p ON m.property_id = p.id
+           LEFT JOIN users u ON m.tenant_id = u.id
+           WHERE m.status NOT IN ('resolved','closed','cancelled')
+             AND m.tenant_id IS NOT NULL`
+        : `SELECT m.id, m.title, m.priority, m.created_at,
+                  CONCAT(u.given_name, ' ', u.last_name) AS tenant_name,
+                  COALESCE(p.property_name, p.address_line_1) AS property_name
+           FROM maintenance_requests m
+           JOIN properties p ON m.property_id = p.id
+           LEFT JOIN users u ON m.tenant_id = u.id
+           WHERE p.landlord_id = ?
+             AND m.status NOT IN ('resolved','closed','cancelled')
+             AND m.tenant_id IS NOT NULL`;
+
+      const [openMaintenance] = await pool.query(maintenanceQuery, role === 'admin' ? [] : [userId]);
+      for (const m of openMaintenance) {
+        const severityMap = { emergency: 'high', urgent: 'high', high: 'warning', medium: 'normal', low: 'low' };
+        alerts.push({
+          id: `maintenance-${m.id}`,
+          type: 'maintenance_new',
+          severity: severityMap[m.priority] || 'normal',
+          title: 'Maintenance Request',
+          message: `${m.tenant_name} raised "${m.title}" at ${m.property_name}.`,
+          tenancyId: null,
+          createdAt: m.created_at,
+        });
+      }
+
       // Sort high severity first
       const order = { high: 0, warning: 1, normal: 2, low: 3 };
       alerts.sort((a, b) => (order[a.severity] ?? 2) - (order[b.severity] ?? 2));
@@ -672,7 +706,22 @@ async function notificationsRoutes(fastify, options) {
         ORDER BY d.created_at DESC LIMIT 15
       `, [userId]);
 
-      // 3. Rent payments received
+      // 3. Maintenance requests raised by tenants
+      const [maintenance] = await pool.query(`
+        SELECT m.id AS entity_id, m.created_at, m.title, m.priority,
+               CONCAT(u.given_name, ' ', u.last_name) AS tenant_name,
+               u.given_name, u.last_name,
+               COALESCE(p.property_name, p.address_line_1) AS property_name
+        FROM maintenance_requests m
+        JOIN properties p ON m.property_id = p.id
+        LEFT JOIN users u ON m.tenant_id = u.id
+        WHERE p.landlord_id = ?
+          AND m.tenant_id IS NOT NULL
+          AND m.created_at >= DATE_SUB(NOW(), INTERVAL 60 DAY)
+        ORDER BY m.created_at DESC LIMIT 15
+      `, [userId]);
+
+      // 4. Rent payments received
       const [payments] = await pool.query(`
         SELECT tx.id AS entity_id, tx.created_at, tx.amount, tx.date AS due_date,
                CONCAT(u.given_name, ' ', u.last_name) AS tenant_name,
@@ -715,6 +764,20 @@ async function notificationsRoutes(fastify, options) {
           tenantName:  row.tenant_name,
           initials:    `${(row.given_name || '?')[0]}${(row.last_name || '?')[0]}`.toUpperCase(),
           tenancyId:   row.tenancy_id,
+          createdAt:   row.created_at,
+        });
+      }
+
+      for (const row of maintenance) {
+        events.push({
+          id:          `maintenance-${row.entity_id}`,
+          type:        'maintenance_new',
+          title:       'Maintenance Request',
+          description: `${row.title} · ${row.tenant_name} · ${row.property_name}`,
+          tenantName:  row.tenant_name,
+          initials:    `${(row.given_name || '?')[0]}${(row.last_name || '?')[0]}`.toUpperCase(),
+          maintenanceId: row.entity_id,
+          priority:    row.priority,
           createdAt:   row.created_at,
         });
       }

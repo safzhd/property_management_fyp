@@ -155,7 +155,7 @@ async function maintenanceRoutes(fastify, options) {
       // Tenants can only create requests for properties they're in
       if (request.user.role === 'tenant') {
         const [tenancies] = await pool.query(
-          `SELECT id FROM tenancies WHERE tenant_id = ? AND property_id = ? AND lifecycle_status IN ('active', 'notice')`,
+          `SELECT id FROM tenancies WHERE tenant_id = ? AND property_id = ? AND lifecycle_status IN ('onboarding', 'active', 'notice')`,
           [request.user.id, validated.propertyId]
         );
         if (tenancies.length === 0) {
@@ -197,6 +197,29 @@ async function maintenanceRoutes(fastify, options) {
          WHERE m.id = ?`,
         [id]
       );
+
+      // Notify the landlord
+      const landlordId = properties[0].landlord_id;
+      if (landlordId && request.user.role === 'tenant') {
+        const [tenantRows] = await pool.query(
+          'SELECT given_name, last_name FROM users WHERE id = ?',
+          [request.user.id]
+        );
+        const tenantName = tenantRows[0] ? `${tenantRows[0].given_name} ${tenantRows[0].last_name}` : 'A tenant';
+        const notifId = generateUUID();
+        await pool.query(
+          `INSERT INTO notifications (id, user_id, type, title, message, priority, related_entity_type, related_entity_id)
+           VALUES (?, ?, 'maintenance_new', ?, ?, ?, 'maintenance', ?)`,
+          [
+            notifId,
+            landlordId,
+            `New Maintenance Request`,
+            `${tenantName} raised a ${validated.priority} priority issue: "${validated.title}"`,
+            validated.priority === 'emergency' || validated.priority === 'urgent' ? 'urgent' : 'normal',
+            id
+          ]
+        );
+      }
 
       return reply.code(201).send({
         message: 'Maintenance request created successfully',
@@ -304,6 +327,23 @@ async function maintenanceRoutes(fastify, options) {
          WHERE m.id = ?`,
         [request.params.id]
       );
+
+      // Notify the tenant if landlord sent a response (landlordNotes updated)
+      const u = updated[0];
+      if (validated.landlordNotes && u.tenant_id) {
+        const notifId = generateUUID();
+        const statusMsg = validated.status ? ` Status updated to: ${validated.status.replace(/_/g, ' ')}.` : '';
+        await pool.query(
+          `INSERT INTO notifications (id, user_id, type, title, message, priority, related_entity_type, related_entity_id)
+           VALUES (?, ?, 'maintenance_update', 'Maintenance Update', ?, 'normal', 'maintenance', ?)`,
+          [
+            notifId,
+            u.tenant_id,
+            `Your request "${u.title}" has received a response: "${validated.landlordNotes}"${statusMsg}`,
+            request.params.id
+          ]
+        );
+      }
 
       return reply.send({
         message: 'Maintenance request updated successfully',

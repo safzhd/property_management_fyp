@@ -44,7 +44,7 @@ export async function updateTenancyCompliance(
   payload: {
     tenantInfoSheetProvided?: boolean
     howToRentGuideProvided?: boolean
-    depositProtectedDate?: string
+    depositProtectedDate?: string | null
   }
 ): Promise<void> {
   await api.post(`/tenancies/${id}/compliance`, payload)

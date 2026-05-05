@@ -300,13 +300,13 @@ function Step2Property({
 
       {isHmo && (
         <div>
-          <FieldLabel>Room</FieldLabel>
+          <FieldLabel required>Room</FieldLabel>
           <Select
             value={form.roomId}
             onChange={e => setForm(f => ({ ...f, roomId: e.target.value }))}
             disabled={allPropertyRooms.length === 0}
           >
-            <option value="">— select a room (optional) —</option>
+            <option value="">— select a room —</option>
             {availableRooms.map(r => (
               <option key={r.id} value={r.id}>
                 {r.roomName ?? `Room ${r.roomNumber}`}
@@ -681,7 +681,9 @@ export default function AddTenancyPage() {
 
   // ── Validation per step ──────────────────────────────────────────────────────
 
-  const step2Valid = Boolean(form.propertyId)
+  const selectedPropertyForValidation = properties.find(p => p.id === form.propertyId)
+  const isHmoProperty = selectedPropertyForValidation?.propertyType === 'hmo' || selectedPropertyForValidation?.isHmo
+  const step2Valid = Boolean(form.propertyId) && (!isHmoProperty || Boolean(form.roomId))
   const step3Valid = Boolean(form.startDate)
   const step4Valid = Boolean(
     form.rentAmount && parseFloat(form.rentAmount) > 0 &&

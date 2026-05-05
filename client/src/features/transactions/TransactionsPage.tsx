@@ -104,7 +104,6 @@ function TransactionDetailModal({
   onClose: () => void
 }) {
   const isIncome = tx.type === 'income'
-  const overdue  = isOverdue(tx)
   const [lightbox, setLightbox] = useState(false)
 
   const isImage = receipt?.mimeType?.startsWith('image/')

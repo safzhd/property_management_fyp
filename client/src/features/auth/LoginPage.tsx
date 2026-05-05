@@ -2,7 +2,8 @@ import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { useNavigate, useLocation } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
+import { useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { Loader2 } from 'lucide-react'
 import { loginUser } from '@/api/auth'
@@ -23,8 +24,8 @@ function redirectPathForRole(role: Role): string {
 
 export default function LoginPage() {
   const navigate = useNavigate()
-  const location = useLocation()
   const login = useAuthStore((s) => s.login)
+  const queryClient = useQueryClient()
   const [serverError, setServerError] = useState<string | null>(null)
 
   const {
@@ -39,12 +40,11 @@ export default function LoginPage() {
     setServerError(null)
     try {
       const { user, token } = await loginUser(data)
+      queryClient.clear()
       login(user, token)
       toast.success(`Welcome back, ${user.givenName}!`)
 
-      // Go back to where they were trying to go, or role default
-      const from = (location.state as { from?: { pathname: string } })?.from?.pathname
-      navigate(from ?? redirectPathForRole(user.role), { replace: true })
+      navigate(redirectPathForRole(user.role), { replace: true })
     } catch (err: unknown) {
       const message =
         (err as { response?: { data?: { error?: string } } })?.response?.data?.error ??
@@ -64,7 +64,7 @@ export default function LoginPage() {
               <path strokeLinecap="round" strokeLinejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
             </svg>
           </div>
-          <h1 className="text-2xl font-bold text-gray-900 tracking-tight">PropManage</h1>
+          <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Proply360</h1>
           <p className="text-sm text-gray-500 mt-1">HMO Property Management</p>
         </div>
 
@@ -155,7 +155,7 @@ export default function LoginPage() {
 
         {/* Footer */}
         <p className="text-center text-xs text-gray-400 mt-6">
-          © {new Date().getFullYear()} PropManage · All rights reserved
+          © {new Date().getFullYear()} Proply360 · All rights reserved
         </p>
       </div>
     </div>

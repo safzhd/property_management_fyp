@@ -6,10 +6,11 @@ import { getProperty } from '@/api/properties'
 import { OverviewTab } from './tabs/OverviewTab'
 import { RoomsTab } from './tabs/RoomsTab'
 import { DocumentsTab } from './tabs/DocumentsTab'
-import { StubTab } from './tabs/StubTab'
+import { InspectionsTab } from './tabs/InspectionsTab'
+import { TenanciesTab } from './tabs/TenanciesTab'
 import { cn } from '@/lib/utils'
 
-type Tab = 'overview' | 'rooms' | 'tenancies' | 'compliance' | 'maintenance' | 'documents'
+type Tab = 'overview' | 'rooms' | 'tenancies' | 'inspections' | 'documents'
 
 export default function PropertyDetailPage() {
   const { id } = useParams<{ id: string }>()
@@ -27,12 +28,11 @@ export default function PropertyDetailPage() {
   const isHmo = property?.propertyType === 'hmo' || property?.isHmo === true
 
   const allTabs: { id: Tab; label: string; hmoOnly?: boolean }[] = [
-    { id: 'overview',    label: 'Overview' },
-    { id: 'rooms',       label: 'Rooms',       hmoOnly: true },
-    { id: 'tenancies',   label: 'Tenancies' },
-    { id: 'compliance',  label: 'Compliance' },
-    { id: 'maintenance', label: 'Maintenance' },
-    { id: 'documents',   label: 'Documents' },
+    { id: 'overview',     label: 'Overview' },
+    { id: 'rooms',        label: 'Rooms',        hmoOnly: true },
+    { id: 'tenancies',    label: 'Tenancies' },
+    { id: 'inspections',  label: 'Inspections' },
+    { id: 'documents',    label: 'Documents' },
   ]
   const tabs = allTabs.filter(t => !t.hmoOnly || isHmo)
 
@@ -64,7 +64,7 @@ export default function PropertyDetailPage() {
       {/* Header */}
       <div className="flex items-start gap-3">
         <button
-          onClick={() => navigate(-1)}
+          onClick={() => navigate('/app/properties')}
           className="flex items-center justify-center w-9 h-9 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 transition-colors mt-0.5 shrink-0"
         >
           <ArrowLeft className="w-4 h-4 text-gray-600" />
@@ -124,9 +124,8 @@ export default function PropertyDetailPage() {
       <div>
         {activeTab === 'overview'    && <OverviewTab property={property} />}
         {activeTab === 'rooms'       && <RoomsTab propertyId={property.id} />}
-        {activeTab === 'tenancies'   && <StubTab label="Tenancies" />}
-        {activeTab === 'compliance'  && <StubTab label="Compliance" />}
-        {activeTab === 'maintenance' && <StubTab label="Maintenance" />}
+        {activeTab === 'tenancies'   && <TenanciesTab propertyId={property.id} />}
+        {activeTab === 'inspections' && <InspectionsTab propertyId={property.id} />}
         {activeTab === 'documents'   && <DocumentsTab propertyId={property.id} isHmo={isHmo} />}
       </div>
     </div>

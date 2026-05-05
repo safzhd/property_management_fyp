@@ -8,7 +8,7 @@ export interface SmartAlert {
   severity: NotificationSeverity
   title: string
   message: string
-  tenancyId: string
+  tenancyId: string | null
   createdAt: string
 }
 
@@ -27,15 +27,17 @@ export interface Notification {
 }
 
 export interface ActivityEvent {
-  id:          string
-  type:        'tenancy_created' | 'document_uploaded' | 'payment_received'
-  title:       string
-  description: string
-  tenantName:  string
-  initials:    string
-  tenancyId:   string | null
-  createdAt:   string
-  paidLate?:   boolean
+  id:             string
+  type:           'tenancy_created' | 'document_uploaded' | 'payment_received' | 'maintenance_new'
+  title:          string
+  description:    string
+  tenantName:     string
+  initials:       string
+  tenancyId:      string | null
+  maintenanceId?: string
+  priority?:      string
+  createdAt:      string
+  paidLate?:      boolean
 }
 
 export async function getActivity(): Promise<{ events: ActivityEvent[]; count: number }> {

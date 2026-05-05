@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
-import { Link } from 'react-router-dom'
-import { Building2, FileText, TrendingUp, TrendingDown, Plus, ArrowRight, AlertTriangle, AlertCircle, FileCheck, PoundSterling, Home } from 'lucide-react'
+import { Link, useNavigate } from 'react-router-dom'
+import { Building2, FileText, TrendingUp, TrendingDown, Plus, ArrowRight, AlertTriangle, AlertCircle, FileCheck, PoundSterling, Home, Wrench } from 'lucide-react'
 import { getProperties } from '@/api/properties'
 import { getTenancies } from '@/api/tenancies'
 import { getTransactionSummary } from '@/api/transactions'
@@ -96,8 +96,8 @@ export default function DashboardPage() {
     .sort((a, b) => new Date(b.startDate).getTime() - new Date(a.startDate).getTime())
     .slice(0, 5)
 
-  const income   = summary?.summary.totalIncome   ?? 0
-  const expenses = summary?.summary.totalExpenses ?? 0
+  const income   = summary?.summary.total_income   ?? 0
+  const expenses = summary?.summary.total_expenses ?? 0
   const net      = income - expenses
 
   return (
@@ -160,31 +160,38 @@ export default function DashboardPage() {
           <div className="space-y-2">
             {defects.map((alert) => {
               const isHigh = alert.severity === 'high'
-              return (
-                <Link
-                  key={alert.id}
-                  to={`/app/tenancies/${alert.tenancyId}`}
-                  className={cn(
-                    'flex items-start gap-3 p-3 rounded-lg border transition-colors hover:brightness-95',
-                    isHigh
-                      ? 'bg-red-50 border-red-200'
-                      : 'bg-amber-50 border-amber-200'
-                  )}
-                >
-                  <AlertCircle className={cn('w-4 h-4 mt-0.5 shrink-0', isHigh ? 'text-red-500' : 'text-amber-500')} />
+              const isMaintenance = alert.type === 'maintenance_new'
+              const destination = isMaintenance ? '/app/maintenance' : alert.tenancyId ? `/app/tenancies/${alert.tenancyId}` : null
+              const cardClass = cn(
+                'flex items-start gap-3 p-3 rounded-lg border transition-colors hover:brightness-95',
+                isMaintenance
+                  ? 'bg-orange-50 border-orange-200'
+                  : isHigh ? 'bg-red-50 border-red-200' : 'bg-amber-50 border-amber-200'
+              )
+              const inner = (
+                <>
+                  {isMaintenance
+                    ? <Wrench className="w-4 h-4 mt-0.5 shrink-0 text-orange-500" />
+                    : <AlertCircle className={cn('w-4 h-4 mt-0.5 shrink-0', isHigh ? 'text-red-500' : 'text-amber-500')} />
+                  }
                   <div className="min-w-0">
-                    <p className={cn('text-sm font-semibold', isHigh ? 'text-red-700' : 'text-amber-700')}>
+                    <p className={cn('text-sm font-semibold', isMaintenance ? 'text-orange-700' : isHigh ? 'text-red-700' : 'text-amber-700')}>
                       {alert.title}
                     </p>
                     <p className="text-xs text-gray-500 mt-0.5">{alert.message}</p>
                   </div>
                   <span className={cn(
                     'ml-auto text-xs font-semibold px-2 py-0.5 rounded-full shrink-0',
-                    isHigh ? 'bg-red-100 text-red-600' : 'bg-amber-100 text-amber-700'
+                    isMaintenance ? 'bg-orange-100 text-orange-600' : isHigh ? 'bg-red-100 text-red-600' : 'bg-amber-100 text-amber-700'
                   )}>
-                    {isHigh ? 'High' : 'Warning'}
+                    {isMaintenance ? 'Maintenance' : isHigh ? 'High' : 'Warning'}
                   </span>
-                </Link>
+                </>
+              )
+              return destination ? (
+                <Link key={alert.id} to={destination} className={cardClass}>{inner}</Link>
+              ) : (
+                <div key={alert.id} className={cardClass}>{inner}</div>
               )
             })}
           </div>
@@ -342,18 +349,28 @@ function timeAgo(iso: string): string {
 }
 
 const EVENT_ICON: Record<ActivityEvent['type'], React.ReactNode> = {
-  tenancy_created:   <Home        className="w-3.5 h-3.5 text-sky-500" />,
-  document_uploaded: <FileCheck   className="w-3.5 h-3.5 text-violet-500" />,
+  tenancy_created:   <Home          className="w-3.5 h-3.5 text-sky-500" />,
+  document_uploaded: <FileCheck     className="w-3.5 h-3.5 text-violet-500" />,
   payment_received:  <PoundSterling className="w-3.5 h-3.5 text-emerald-500" />,
+  maintenance_new:   <Wrench        className="w-3.5 h-3.5 text-orange-500" />,
 }
 
 const EVENT_DOT: Record<ActivityEvent['type'], string> = {
   tenancy_created:   'bg-sky-400',
   document_uploaded: 'bg-violet-400',
   payment_received:  'bg-emerald-400',
+  maintenance_new:   'bg-orange-400',
 }
 
 function ActivityFeed({ events }: { events: ActivityEvent[] }) {
+  const navigate = useNavigate()
+
+  function getLink(event: ActivityEvent): string | null {
+    if (event.type === 'maintenance_new') return '/app/maintenance'
+    if (event.tenancyId) return `/app/tenancies/${event.tenancyId}`
+    return null
+  }
+
   return (
     <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
       <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
@@ -367,14 +384,16 @@ function ActivityFeed({ events }: { events: ActivityEvent[] }) {
         <p className="text-sm text-gray-400 text-center py-10">No recent activity</p>
       ) : (
         <div className="divide-y divide-gray-50">
-          {events.map(event => (
+          {events.map(event => {
+            const link = getLink(event)
+            return (
             <div
               key={event.id}
               className={cn(
                 'flex items-center gap-3.5 px-5 py-3.5 hover:bg-gray-50 transition-colors',
-                event.tenancyId ? 'cursor-pointer' : ''
+                link ? 'cursor-pointer' : ''
               )}
-              onClick={() => event.tenancyId && (window.location.href = `/app/tenancies/${event.tenancyId}`)}
+              onClick={() => link && navigate(link)}
             >
               {/* Avatar */}
               <div className={cn('w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold shrink-0', avatarColour(event.tenantName))}>
@@ -401,7 +420,7 @@ function ActivityFeed({ events }: { events: ActivityEvent[] }) {
                 <span className={cn('w-1.5 h-1.5 rounded-full shrink-0', EVENT_DOT[event.type])} />
               </div>
             </div>
-          ))}
+          )})}
         </div>
       )}
     </div>

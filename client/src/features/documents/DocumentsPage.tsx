@@ -79,7 +79,6 @@ function formatDate(iso: string) {
 
 function DocCard({ doc, onDelete }: { doc: Document; onDelete: (id: string) => void }) {
   const [armed, setArmed] = useState(false)
-  const isImage = doc.mimeType?.startsWith('image/')
 
   async function handleDownload() {
     try {
